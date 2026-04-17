@@ -71,10 +71,10 @@ func _physics_process(delta: float) -> void:
 
 	# Update debug label
 	var ls: Node = _player.get_long_sword()
-	var debug := "Frame: %d  |  Spirit: %d  |  Iai active: %s  |  Press [/] to change parry window" % [
+	var debug := "帧: %d  |  气: %d  |  見切: %s  |  [ ] 调整見切窗口" % [
 		_frame_count,
 		ls.get_spirit(),
-		str(ls.is_iai_active())
+		"激活中" if ls.is_iai_active() else "待机"
 	]
 	_hud.update_debug(debug)
 
