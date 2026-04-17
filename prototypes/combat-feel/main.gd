@@ -41,27 +41,29 @@ func _ready() -> void:
 	_hud.set_spirit_level(0)
 	_hud.set_charge_level(0)
 
-	# Connect signals
+	# Connect signals — player
 	_player.health_changed.connect(_on_player_health_changed)
 	_player.weapon_switched.connect(_on_weapon_switched)
 	_player.died.connect(_on_player_died)
 
+	# Connect signals — boss
 	_boss.health_changed.connect(_on_boss_health_changed)
 	_boss.defeated.connect(_on_boss_defeated)
 	_boss.phase_changed.connect(_on_boss_phase_changed)
 
+	# Connect signals — long sword
 	var ls: Node = _player.get_long_sword()
 	ls.spirit_changed.connect(_hud.set_spirit)
 	ls.spirit_level_changed.connect(_hud.set_spirit_level)
-	ls.iai_success.connect(_on_iai_success)
+	ls.grand_iai_success.connect(_on_grand_iai_success)
 
+	# Connect signals — great sword
 	var gs: Node = _player.get_great_sword()
 	gs.charge_level_changed.connect(_hud.set_charge_level)
 
-	# HUD parry window changes → long sword
+	# HUD parry window changes → long sword grand iai window
 	_hud.parry_window_changed.connect(_on_parry_window_changed)
-	# Sync initial value
-	ls.iai_window_frames = _hud.get_parry_frames()
+	ls.grand_iai_window_frames = _hud.get_parry_frames()
 
 
 func _physics_process(delta: float) -> void:
@@ -72,10 +74,11 @@ func _physics_process(delta: float) -> void:
 
 	# Update debug label
 	var ls: Node = _player.get_long_sword()
-	var debug := "帧: %d  |  气: %d  |  見切: %s  |  Boss Phase: %d  |  [ ] 调整見切窗口" % [
+	var stance_str: String = ls.get_stance_state()
+	var debug := "帧: %d  |  气: %d  |  太刀: %s  |  Boss P%d  |  [ ] 调窗口" % [
 		_frame_count,
 		ls.get_spirit(),
-		"激活中" if ls.is_iai_active() else "待机",
+		stance_str,
 		_boss.get_phase() + 1,
 	]
 	_hud.update_debug(debug)
@@ -102,7 +105,7 @@ func _on_boss_defeated() -> void:
 	print("--- FIGHT OVER: Boss defeated! Press R to restart. ---")
 
 
-func _on_iai_success(frame_hit: int, window: int) -> void:
+func _on_grand_iai_success(frame_hit: int, window: int) -> void:
 	_hud.flash_iai_success()
 	_boss.notify_parried()
 
@@ -112,8 +115,8 @@ func _on_boss_phase_changed(new_phase: int) -> void:
 
 
 func _on_parry_window_changed(new_frames: int) -> void:
-	_player.get_long_sword().iai_window_frames = new_frames
-	print("Parry window set to %d frames (%.0fms)" % [new_frames, new_frames * (1000.0 / 60.0)])
+	_player.get_long_sword().grand_iai_window_frames = new_frames
+	print("Grand Iai window set to %d frames (%.0fms)" % [new_frames, new_frames * (1000.0 / 60.0)])
 
 
 func _restart() -> void:
