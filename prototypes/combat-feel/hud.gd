@@ -88,14 +88,14 @@ func set_spirit(value: int) -> void:
 
 
 func set_spirit_level(level: int) -> void:
-	var color := SPIRIT_COLORS[clamp(level, 0, 2)]
+	var color: Color = SPIRIT_COLORS[clampi(level, 0, 2)]
 	if _spirit_bar:
 		# Tint bar
 		var style := StyleBoxFlat.new()
 		style.bg_color = color
 		_spirit_bar.add_theme_stylebox_override("fill", style)
 	if _spirit_level_label:
-		_spirit_level_label.text = SPIRIT_LEVEL_NAMES[clamp(level, 0, 2)]
+		_spirit_level_label.text = SPIRIT_LEVEL_NAMES[clampi(level, 0, 2)]
 		_spirit_level_label.add_theme_color_override("font_color", color)
 
 

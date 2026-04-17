@@ -157,12 +157,12 @@ func _check_combo_hits() -> void:
 
 	var results := space.intersect_shape(query, 8)
 	for r in results:
-		var body = r["collider"]
-		if body.has_method("take_damage"):
+		var body: Node2D = r["collider"] as Node2D
+		if body and body.has_method("take_damage"):
 			var to_body: Vector2 = (body.global_position - origin).normalized()
 			var angle: float = facing.angle_to(to_body)
 			if abs(angle) <= HITBOX_ARC * 0.5:
-				var idx := clamp(_combo_index - 1, 0, 2)
+				var idx: int = clampi(_combo_index - 1, 0, 2)
 				var bonus := SPIRIT_DAMAGE_BONUS[_spirit_level]
 				var base_dmg: int = COMBO_DAMAGE[idx]
 				var dmg: int = int(base_dmg * (1.0 + bonus))
@@ -243,8 +243,8 @@ func _execute_counter_slash(origin: Vector2) -> void:
 
 	var results := space.intersect_shape(query, 8)
 	for r in results:
-		var body = r["collider"]
-		if body.has_method("take_damage"):
+		var body: Node2D = r["collider"] as Node2D
+		if body and body.has_method("take_damage"):
 			body.take_damage(IAI_COUNTER_DAMAGE, player.global_position)
 			combo_hit.emit(-1, IAI_COUNTER_DAMAGE, body.global_position)
 
@@ -262,8 +262,8 @@ func _execute_spirit_release() -> void:
 
 	var results := space.intersect_shape(query, 8)
 	for r in results:
-		var body = r["collider"]
-		if body.has_method("take_damage"):
+		var body: Node2D = r["collider"] as Node2D
+		if body and body.has_method("take_damage"):
 			body.take_damage(RELEASE_DAMAGE, player.global_position)
 			spirit_release_fired.emit(RELEASE_DAMAGE, body.global_position)
 

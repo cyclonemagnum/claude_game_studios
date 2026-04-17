@@ -126,8 +126,8 @@ func _check_hits() -> void:
 
 	var results := space.intersect_shape(query, 8)
 	for r in results:
-		var body = r["collider"]
-		if body.has_method("take_damage"):
+		var body: Node2D = r["collider"] as Node2D
+		if body and body.has_method("take_damage"):
 			# Check arc
 			var to_body: Vector2 = (body.global_position - origin).normalized()
 			var angle: float = facing.angle_to(to_body)
