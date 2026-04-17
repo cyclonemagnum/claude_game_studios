@@ -49,12 +49,12 @@ func _ready() -> void:
 	_boss.health_changed.connect(_on_boss_health_changed)
 	_boss.defeated.connect(_on_boss_defeated)
 
-	var ls := _player.get_long_sword()
+	var ls: Node = _player.get_long_sword()
 	ls.spirit_changed.connect(_hud.set_spirit)
 	ls.spirit_level_changed.connect(_hud.set_spirit_level)
 	ls.iai_success.connect(_on_iai_success)
 
-	var gs := _player.get_great_sword()
+	var gs: Node = _player.get_great_sword()
 	gs.charge_level_changed.connect(_hud.set_charge_level)
 
 	# HUD parry window changes → long sword
@@ -70,7 +70,7 @@ func _physics_process(delta: float) -> void:
 		_restart()
 
 	# Update debug label
-	var ls := _player.get_long_sword()
+	var ls: Node = _player.get_long_sword()
 	var debug := "Frame: %d  |  Spirit: %d  |  Iai active: %s  |  Press [/] to change parry window" % [
 		_frame_count,
 		ls.get_spirit(),
