@@ -7,8 +7,11 @@
 [ext_resource type="PackedScene" path="res://hud.tscn" id="5_hud"]
 [ext_resource type="Script" path="res://hit_effect.gd" id="6_hit"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_arena"]
-size = Vector2(1800, 1000)
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_h"]
+size = Vector2(1800, 40)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_v"]
+size = Vector2(40, 1000)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -25,19 +28,19 @@ collision_layer = 1
 
 [node name="WallTop" type="CollisionShape2D" parent="ArenaWalls"]
 position = Vector2(0, -520)
-shape = SubResource("RectangleShape2D_arena")
+shape = SubResource("RectangleShape2D_wall_h")
 
 [node name="WallBottom" type="CollisionShape2D" parent="ArenaWalls"]
 position = Vector2(0, 520)
-shape = SubResource("RectangleShape2D_arena")
+shape = SubResource("RectangleShape2D_wall_h")
 
 [node name="WallLeft" type="CollisionShape2D" parent="ArenaWalls"]
 position = Vector2(-920, 0)
-shape = SubResource("RectangleShape2D_arena")
+shape = SubResource("RectangleShape2D_wall_v")
 
 [node name="WallRight" type="CollisionShape2D" parent="ArenaWalls"]
 position = Vector2(920, 0)
-shape = SubResource("RectangleShape2D_arena")
+shape = SubResource("RectangleShape2D_wall_v")
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(-200, 0)
