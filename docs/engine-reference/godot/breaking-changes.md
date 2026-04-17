@@ -1,8 +1,21 @@
 # Godot — Breaking Changes
 
-Last verified: 2026-02-12
+Last verified: 2026-04-17
 
 Changes between Godot versions, focused on post-LLM-cutoff changes (4.4+).
+
+## 4.6 → 4.6.1 (March 2026 — MAINTENANCE, LOW RISK)
+
+Stability fixes only. No breaking changes for GDScript projects.
+
+| Subsystem | Fix | Notes |
+|-----------|-----|-------|
+| Animation | Fixed use-after-free in AnimationTree | Critical stability fix |
+| Animation | Corrected LookAtModifier3D calculations | Math fix |
+| Rendering | Improved sky rendering precision | Visual quality improvement |
+| Rendering | Fixed MSAA 2x sampling | Correctness fix |
+| 3D Editor | Skeleton3D bone button priority fix | Editor UX fix |
+| C# (N/A) | GDExtension-based C# classes, Array→GodotArray rename | Does NOT affect GDScript projects |
 
 ## 4.5 → 4.6 (Jan 2026 — POST-CUTOFF, HIGH RISK)
 
