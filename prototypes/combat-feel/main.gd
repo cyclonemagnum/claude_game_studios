@@ -48,6 +48,7 @@ func _ready() -> void:
 
 	_boss.health_changed.connect(_on_boss_health_changed)
 	_boss.defeated.connect(_on_boss_defeated)
+	_boss.phase_changed.connect(_on_boss_phase_changed)
 
 	var ls: Node = _player.get_long_sword()
 	ls.spirit_changed.connect(_hud.set_spirit)
@@ -71,10 +72,11 @@ func _physics_process(delta: float) -> void:
 
 	# Update debug label
 	var ls: Node = _player.get_long_sword()
-	var debug := "帧: %d  |  气: %d  |  見切: %s  |  [ ] 调整見切窗口" % [
+	var debug := "帧: %d  |  气: %d  |  見切: %s  |  Boss Phase: %d  |  [ ] 调整見切窗口" % [
 		_frame_count,
 		ls.get_spirit(),
-		"激活中" if ls.is_iai_active() else "待机"
+		"激活中" if ls.is_iai_active() else "待机",
+		_boss.get_phase() + 1,
 	]
 	_hud.update_debug(debug)
 
@@ -102,6 +104,11 @@ func _on_boss_defeated() -> void:
 
 func _on_iai_success(frame_hit: int, window: int) -> void:
 	_hud.flash_iai_success()
+	_boss.notify_parried()
+
+
+func _on_boss_phase_changed(new_phase: int) -> void:
+	_hud.set_boss_phase(new_phase)
 
 
 func _on_parry_window_changed(new_frames: int) -> void:

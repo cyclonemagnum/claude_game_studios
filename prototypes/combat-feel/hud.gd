@@ -1,7 +1,7 @@
 # PROTOTYPE - NOT FOR PRODUCTION
 extends CanvasLayer
 
-## Minimal HUD: HP bars, weapon indicator, spirit gauge, charge pips, iai window display.
+## Minimal HUD: HP bars, weapon indicator, spirit gauge, charge pips, iai window, boss phase.
 
 signal parry_window_changed(new_frames: int)
 
@@ -11,6 +11,17 @@ const SPIRIT_COLORS: Array[Color] = [
 	Color(1.0, 0.3, 0.2)
 ]
 const SPIRIT_LEVEL_NAMES: Array[String] = ["白 White", "黄 Yellow", "赤 Red"]
+
+const PHASE_DISPLAY: Array[String] = [
+	"Phase 1 — 学习",
+	"Phase 2 — 狂暴化",
+	"Phase 3 — 极限",
+]
+const PHASE_COLORS: Array[Color] = [
+	Color(0.85, 0.15, 0.15),
+	Color(0.9, 0.4, 0.05),
+	Color(0.7, 0.0, 0.3),
+]
 
 var _player_hp_bar: ProgressBar = null
 var _boss_hp_bar: ProgressBar = null
@@ -23,6 +34,8 @@ var _charge_pips: Array[ColorRect] = []
 var _iai_window_label: Label = null
 var _debug_label: Label = null
 var _iai_flash_rect: ColorRect = null
+var _boss_phase_label: Label = null
+var _phase_flash_rect: ColorRect = null
 
 var _current_parry_frames: int = 6
 
@@ -43,6 +56,8 @@ func _ready() -> void:
 	_iai_window_label = $IaiWindowLabel
 	_debug_label = $DebugLabel
 	_iai_flash_rect = $IaiFlash
+	_boss_phase_label = $BossPhaseLabel
+	_phase_flash_rect = $PhaseFlash
 
 	_update_iai_label()
 	_spirit_container.visible = true
@@ -75,7 +90,6 @@ func set_boss_hp(current: int, maximum: int) -> void:
 func set_weapon(name_str: String, mode: int) -> void:
 	if _weapon_label:
 		_weapon_label.text = name_str
-	# mode 0 = long sword, 1 = great sword
 	if _spirit_container:
 		_spirit_container.visible = (mode == 0)
 	if _charge_container:
@@ -90,7 +104,6 @@ func set_spirit(value: int) -> void:
 func set_spirit_level(level: int) -> void:
 	var color: Color = SPIRIT_COLORS[clampi(level, 0, 2)]
 	if _spirit_bar:
-		# Tint bar
 		var style := StyleBoxFlat.new()
 		style.bg_color = color
 		_spirit_bar.add_theme_stylebox_override("fill", style)
@@ -103,6 +116,24 @@ func set_charge_level(level: int) -> void:
 	for i in range(3):
 		if _charge_pips[i]:
 			_charge_pips[i].color = Color.WHITE if i < level else Color(0.3, 0.3, 0.3)
+
+
+func set_boss_phase(phase: int) -> void:
+	var idx: int = clampi(phase, 0, 2)
+	if _boss_phase_label:
+		_boss_phase_label.text = PHASE_DISPLAY[idx]
+		_boss_phase_label.add_theme_color_override("font_color", PHASE_COLORS[idx])
+	# Flash screen on phase change
+	flash_phase_transition(PHASE_COLORS[idx])
+
+
+func flash_phase_transition(color: Color) -> void:
+	if _phase_flash_rect:
+		_phase_flash_rect.visible = true
+		_phase_flash_rect.color = Color(color.r, color.g, color.b, 0.5)
+		var tween := create_tween()
+		tween.tween_property(_phase_flash_rect, "color:a", 0.0, 0.8)
+		tween.tween_callback(func(): _phase_flash_rect.visible = false)
 
 
 func flash_iai_success() -> void:
