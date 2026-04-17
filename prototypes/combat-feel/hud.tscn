@@ -1,0 +1,141 @@
+[gd_scene load_steps=6 format=3 uid="uid://combat_feel_hud"]
+
+[ext_resource type="Script" path="res://hud.gd" id="1_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp"]
+bg_color = Color(0.2, 0.8, 0.2, 1.0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_boss_hp"]
+bg_color = Color(0.9, 0.2, 0.2, 1.0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_spirit"]
+bg_color = Color(1.0, 1.0, 1.0, 1.0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_bg"]
+bg_color = Color(0.15, 0.15, 0.15, 0.9)
+
+[node name="HUD" type="CanvasLayer"]
+layer = 5
+script = ExtResource("1_hud")
+
+[node name="PlayerHP" type="ProgressBar" parent="."]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 260.0
+offset_bottom = 42.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp")
+theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
+
+[node name="PlayerHPLabel" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 44.0
+offset_right = 140.0
+offset_bottom = 62.0
+text = "HP"
+
+[node name="BossHP" type="ProgressBar" parent="."]
+offset_left = 760.0
+offset_top = 20.0
+offset_right = 1160.0
+offset_bottom = 42.0
+max_value = 500.0
+value = 500.0
+show_percentage = false
+theme_override_styles/fill = SubResource("StyleBoxFlat_boss_hp")
+theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
+
+[node name="BossHPLabel" type="Label" parent="."]
+offset_left = 910.0
+offset_top = 44.0
+offset_right = 1010.0
+offset_bottom = 62.0
+horizontal_alignment = 1
+text = "BOSS HP"
+
+[node name="WeaponLabel" type="Label" parent="."]
+offset_left = 1700.0
+offset_top = 20.0
+offset_right = 1900.0
+offset_bottom = 48.0
+horizontal_alignment = 2
+text = "Long Sword (太刀)"
+
+[node name="SpiritContainer" type="Control" parent="."]
+offset_left = 1650.0
+offset_top = 52.0
+offset_right = 1900.0
+offset_bottom = 100.0
+
+[node name="SpiritBar" type="ProgressBar" parent="SpiritContainer"]
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 250.0
+offset_bottom = 22.0
+max_value = 100.0
+value = 0.0
+show_percentage = false
+theme_override_styles/fill = SubResource("StyleBoxFlat_spirit")
+theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
+
+[node name="SpiritLevelLabel" type="Label" parent="SpiritContainer"]
+offset_left = 0.0
+offset_top = 24.0
+offset_right = 250.0
+offset_bottom = 44.0
+horizontal_alignment = 2
+text = "白 White"
+
+[node name="ChargeContainer" type="Control" parent="."]
+offset_left = 1700.0
+offset_top = 52.0
+offset_right = 1900.0
+offset_bottom = 90.0
+visible = false
+
+[node name="Pip1" type="ColorRect" parent="ChargeContainer"]
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 60.0
+offset_bottom = 28.0
+color = Color(0.3, 0.3, 0.3, 1.0)
+
+[node name="Pip2" type="ColorRect" parent="ChargeContainer"]
+offset_left = 70.0
+offset_top = 0.0
+offset_right = 130.0
+offset_bottom = 28.0
+color = Color(0.3, 0.3, 0.3, 1.0)
+
+[node name="Pip3" type="ColorRect" parent="ChargeContainer"]
+offset_left = 140.0
+offset_top = 0.0
+offset_right = 200.0
+offset_bottom = 28.0
+color = Color(0.3, 0.3, 0.3, 1.0)
+
+[node name="IaiWindowLabel" type="Label" parent="."]
+offset_left = 700.0
+offset_top = 1040.0
+offset_right = 1220.0
+offset_bottom = 1068.0
+horizontal_alignment = 1
+text = "見切窗口: 6帧 (100ms)"
+
+[node name="DebugLabel" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 1040.0
+offset_right = 900.0
+offset_bottom = 1068.0
+text = "Frame: 0"
+
+[node name="IaiFlash" type="ColorRect" parent="."]
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 1920.0
+offset_bottom = 1080.0
+color = Color(0.3, 0.7, 1.0, 0.0)
+mouse_filter = 2
+visible = false
