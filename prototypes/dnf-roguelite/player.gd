@@ -240,8 +240,8 @@ func _can_act() -> bool:
 
 
 func _handle_movement(_delta: float) -> void:
-	var input_x := Input.get_axis("move_left", "move_right")
-	var input_z := Input.get_axis("move_up", "move_down")
+	var input_x: float = Input.get_axis("move_left", "move_right")
+	var input_z: float = Input.get_axis("move_up", "move_down")
 
 	# Slower in stance
 	var speed_mult: float = 0.4 if _ls_in_stance else 1.0
@@ -296,7 +296,7 @@ func _handle_combat_input() -> void:
 	# Weapon switch
 	if Input.is_action_just_pressed("switch_weapon") and _can_act():
 		_weapon_mode = 1 - _weapon_mode
-		var wname := "太刀" if _weapon_mode == 0 else "大剑"
+		var wname: String = "太刀" if _weapon_mode == 0 else "大剑"
 		weapon_switched.emit(wname)
 		_gs_charging = false
 		_gs_charge_time = 0.0
@@ -359,7 +359,7 @@ func _start_dodge() -> void:
 	_dodge_cooldown_timer = DODGE_COOLDOWN
 	_invincible = true
 	_invincible_timer = iframes_duration
-	var input_x := Input.get_axis("move_left", "move_right")
+	var input_x: float = Input.get_axis("move_left", "move_right")
 	_dodge_dir = facing if input_x == 0.0 else (1.0 if input_x > 0.0 else -1.0)
 
 
@@ -501,7 +501,7 @@ func _handle_greatsword_attack_release() -> void:
 	if not _gs_charging:
 		return
 	_gs_charging = false
-	var level := _get_gs_charge_level()
+	var level: int = _get_gs_charge_level()
 	_gs_charge_level = level
 	_gs_swinging = true
 	_gs_swing_timer = 0.12
@@ -640,7 +640,7 @@ func _update_crash_slash(delta: float) -> void:
 # ===== Hit detection =====
 
 func _do_melee_hit(hit_range: float, damage: int) -> void:
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	var enemies: Array[Node] = get_tree().get_nodes_in_group("enemies")
 	for enemy in enemies:
 		if not enemy.has_method("take_damage"):
 			continue
@@ -659,7 +659,7 @@ func _do_melee_hit(hit_range: float, damage: int) -> void:
 
 
 func _do_aoe_hit(radius: float, damage: int) -> void:
-	var enemies := get_tree().get_nodes_in_group("enemies")
+	var enemies: Array[Node] = get_tree().get_nodes_in_group("enemies")
 	for enemy in enemies:
 		if not enemy.has_method("take_damage"):
 			continue
@@ -736,12 +736,12 @@ func _update_visual() -> void:
 	elif _ls_grand_iai_dashing:
 		_body.color = COLOR_GRAND_IAI
 	elif _ls_in_stance:
-		var pulse := sin(Engine.get_physics_frames() * 0.2) * 0.3 + 0.7
+		var pulse: float = sin(Engine.get_physics_frames() * 0.2) * 0.3 + 0.7
 		_body.color = COLOR_STANCE * pulse + COLOR_LONGSWORD * (1.0 - pulse)
 	elif _gs_tackling:
 		_body.color = COLOR_TACKLE
 	elif _gs_charging:
-		var charge_color := COLOR_GREATSWORD.lerp(Color.WHITE, float(_gs_charge_level) / 3.0)
+		var charge_color: Color = COLOR_GREATSWORD.lerp(Color.WHITE, float(_gs_charge_level) / 3.0)
 		_body.color = charge_color
 	elif _weapon_mode == 0:
 		_body.color = COLOR_LONGSWORD

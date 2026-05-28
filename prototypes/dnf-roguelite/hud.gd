@@ -118,7 +118,7 @@ func _on_hp_changed(current: int, maximum: int) -> void:
 
 func _on_weapon_switched(weapon_name: String) -> void:
 	if _weapon_label:
-		var icon := "🗡️" if weapon_name == "太刀" else "⚔️"
+		var icon: String = "🗡️" if weapon_name == "太刀" else "⚔️"
 		_weapon_label.text = "%s %s" % [icon, weapon_name]
 
 
@@ -140,7 +140,7 @@ func _on_combo_hit(index: int, damage: int) -> void:
 			name_str = "%d Hit" % (index + 1)
 		_combo_label.text = "%s  %d dmg" % [name_str, damage]
 		_combo_label.modulate.a = 1.0
-		var tween := create_tween()
+		var tween: Tween = create_tween()
 		tween.tween_interval(0.6)
 		tween.tween_property(_combo_label, "modulate:a", 0.0, 0.3)
 
@@ -149,7 +149,7 @@ func _on_skill_used(skill_name: String) -> void:
 	if _state_label:
 		_state_label.text = skill_name
 		_state_label.modulate.a = 1.0
-		var tween := create_tween()
+		var tween: Tween = create_tween()
 		tween.tween_interval(0.8)
 		tween.tween_property(_state_label, "modulate:a", 0.0, 0.3)
 
@@ -176,8 +176,8 @@ func _process(_delta: float) -> void:
 			_skill1_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.2))
 
 	if _skill2_label:
-		var mode := _player_ref.get_weapon_mode()
-		if mode == 0:
+		var skill2_mode: int = _player_ref.get_weapon_mode()
+		if skill2_mode == 0:
 			_skill2_label.text = "[L] 居合構え (需30气)"
 			_skill2_label.add_theme_color_override("font_color", Color(0.3, 0.5, 1.0))
 		else:
@@ -189,8 +189,8 @@ func _process(_delta: float) -> void:
 				_skill2_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.2))
 
 	# Weapon specific info
-	var mode := _player_ref.get_weapon_mode()
-	if mode == 0:
+	var wmode: int = _player_ref.get_weapon_mode()
+	if wmode == 0:
 		_spirit_label.visible = true
 		_charge_label.visible = false
 		_spirit_label.text = "气: %d/100" % _player_ref.get_spirit()
@@ -198,8 +198,8 @@ func _process(_delta: float) -> void:
 		_spirit_label.visible = false
 		_charge_label.visible = true
 		if _player_ref.is_charging_gs():
-			var lvl := _player_ref.get_gs_charge_level()
-			var pips := "●" .repeat(lvl) + "○".repeat(3 - lvl)
+			var lvl: int = _player_ref.get_gs_charge_level()
+			var pips: String = "●".repeat(lvl) + "○".repeat(3 - lvl)
 			_charge_label.text = "蓄力: %s" % pips
 			_charge_label.add_theme_color_override("font_color", Color.WHITE if lvl == 3 else Color(0.8, 0.8, 0.8))
 		else:

@@ -29,7 +29,7 @@ func _build_arena() -> void:
 	add_child(_arena_bg)
 
 	# Ground plane (DNF style — flat ground with some Z depth)
-	var ground := ColorRect.new()
+	var ground: ColorRect = ColorRect.new()
 	ground.size = Vector2(1400, 250)
 	ground.position = Vector2(-700, -125)
 	ground.color = Color(0.15, 0.15, 0.2)
@@ -37,20 +37,20 @@ func _build_arena() -> void:
 
 	# Ground lines to show Z-depth
 	for i in range(6):
-		var line := ColorRect.new()
+		var line: ColorRect = ColorRect.new()
 		line.size = Vector2(1400, 1)
 		line.position = Vector2(-700, -100 + i * 40)
 		line.color = Color(0.25, 0.25, 0.3, 0.5)
 		_arena_bg.add_child(line)
 
 	# Arena borders (left/right walls)
-	var wall_l := ColorRect.new()
+	var wall_l: ColorRect = ColorRect.new()
 	wall_l.size = Vector2(8, 280)
 	wall_l.position = Vector2(-704, -140)
 	wall_l.color = Color(0.4, 0.3, 0.2)
 	_arena_bg.add_child(wall_l)
 
-	var wall_r := ColorRect.new()
+	var wall_r: ColorRect = ColorRect.new()
 	wall_r.size = Vector2(8, 280)
 	wall_r.position = Vector2(696, -140)
 	wall_r.color = Color(0.4, 0.3, 0.2)
@@ -105,7 +105,7 @@ func _setup_room_manager() -> void:
 
 
 func _show_result_label() -> void:
-	var canvas := CanvasLayer.new()
+	var canvas: CanvasLayer = CanvasLayer.new()
 	canvas.layer = 10
 	add_child(canvas)
 

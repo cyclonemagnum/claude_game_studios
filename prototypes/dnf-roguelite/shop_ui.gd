@@ -31,7 +31,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	# Background overlay
-	var overlay := ColorRect.new()
+	var overlay: ColorRect = ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.7)
 	overlay.anchor_right = 1.0
 	overlay.anchor_bottom = 1.0
@@ -48,7 +48,7 @@ func _build_ui() -> void:
 
 	# Create 3 option buttons
 	for i in range(3):
-		var btn := Button.new()
+		var btn: Button = Button.new()
 		btn.position = Vector2(310 + i * 440, 350)
 		btn.size = Vector2(380, 250)
 		btn.add_theme_font_size_override("font_size", 20)
@@ -56,7 +56,7 @@ func _build_ui() -> void:
 		add_child(btn)
 		_buttons.append(btn)
 
-		var desc := Label.new()
+		var desc: Label = Label.new()
 		desc.position = Vector2(310 + i * 440, 610)
 		desc.size = Vector2(380, 40)
 		desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -78,7 +78,7 @@ func open_shop(player: Node2D) -> void:
 
 func _generate_options() -> void:
 	_options.clear()
-	var available := UPGRADES.duplicate()
+	var available: Array = UPGRADES.duplicate()
 	available.shuffle()
 	for i in range(min(3, available.size())):
 		_options.append(available[i])

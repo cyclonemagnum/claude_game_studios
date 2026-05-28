@@ -65,7 +65,7 @@ func _spawn_mob_room(count: int) -> void:
 	_enemies_alive = count
 
 	for i in range(count):
-		var enemy := Node2D.new()
+		var enemy: Node2D = Node2D.new()
 		enemy.set_script(_enemy_script)
 		add_child(enemy)
 
@@ -83,7 +83,7 @@ func _spawn_boss_room() -> void:
 	_enemies.clear()
 	_enemies_alive = 1
 
-	var boss := Node2D.new()
+	var boss: Node2D = Node2D.new()
 	boss.set_script(_boss_script)
 	add_child(boss)
 	boss.setup(400.0, 0.0, 200)
@@ -114,7 +114,7 @@ func _on_enemy_died(_enemy: Node2D) -> void:
 func _on_room_cleared() -> void:
 	room_cleared.emit()
 	# Wait a moment then advance
-	var timer := get_tree().create_timer(1.0)
+	var timer: SceneTreeTimer = get_tree().create_timer(1.0)
 	timer.timeout.connect(_advance_room)
 
 

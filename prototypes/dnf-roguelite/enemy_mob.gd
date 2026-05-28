@@ -185,7 +185,7 @@ func _die() -> void:
 	_hp_bar.visible = false
 	enemy_died.emit(self)
 	# Fade out
-	var tween := create_tween()
+	var tween: Tween = create_tween()
 	tween.tween_property(self, "modulate:a", 0.0, 0.5)
 	tween.tween_callback(queue_free)
 
