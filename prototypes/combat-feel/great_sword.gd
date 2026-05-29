@@ -13,7 +13,7 @@ const CHARGE_TIME_L2: float = 0.7
 const CHARGE_TIME_L3: float = 1.4
 const CHARGE_TIME_MAX: float = 2.0
 
-const DAMAGE_MULT: Array[float] = [1.0, 2.0, 3.0]
+const DAMAGE_MULT: Array[float] = [1.0, 1.8, 3.5]   # Lv3更具诱惑性 (原 1/2/3)
 const RECOVERY_TIME: Array[float] = [0.3, 0.5, 0.8]
 
 const HITBOX_RADIUS: Array[float] = [50.0, 75.0, 100.0]

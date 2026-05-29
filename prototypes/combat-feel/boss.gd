@@ -35,30 +35,32 @@ const PHASE_COLORS: Array[Color] = [
 ]
 
 # --- Attack definitions ---
-enum AttackType { SLAM, SWEEP, CHARGE, LEAP, COMBO }
+enum AttackType { SLAM, SWEEP, CHARGE, LEAP, COMBO, THRUST }
 
 const ATTACK_NAMES: Array[String] = [
-	"SLAM 重击", "SWEEP 横扫", "CHARGE 冲撞", "LEAP 跳砸", "COMBO 连斩",
+	"SLAM 重击", "SWEEP 横扫", "CHARGE 冲撞", "LEAP 跳砸", "COMBO 连斩", "THRUST 突刺",
 ]
 
 # Per-phase telegraph speed multiplier (1.0 = base speed)
 const PHASE_SPEED: Array[float] = [1.0, 0.7, 0.45]
 
 # Base telegraph times (scaled by PHASE_SPEED)
-const BASE_TELEGRAPH: Array[float] = [1.0, 0.8, 0.5, 0.9, 0.35]
+# THRUST 故意慢且明显 → 邀请玩家見切
+const BASE_TELEGRAPH: Array[float] = [1.0, 0.8, 0.5, 0.9, 0.35, 0.95]
 
 # Recovery times per attack — the breakwindow
-const RECOVERY_TIMES: Array[float] = [1.2, 0.6, 1.0, 0.8, 1.5]
+# THRUST 失败后大破绽 → 邀请玩家登龍
+const RECOVERY_TIMES: Array[float] = [1.2, 0.6, 1.0, 0.8, 1.5, 1.6]
 
 # Damage per attack
-const ATTACK_DAMAGES: Array[int] = [25, 15, 30, 35, 12]
+const ATTACK_DAMAGES: Array[int] = [25, 15, 30, 35, 12, 28]
 const COMBO_SECOND_HIT_DAMAGE: int = 18
 
 # Attack ranges
-const ATTACK_RANGES: Array[float] = [120.0, 180.0, 250.0, 150.0, 130.0]
+const ATTACK_RANGES: Array[float] = [120.0, 180.0, 250.0, 150.0, 130.0, 220.0]
 
 # Active hitbox windows
-const ACTIVE_WINDOWS: Array[float] = [0.15, 0.2, 0.25, 0.15, 0.12]
+const ACTIVE_WINDOWS: Array[float] = [0.15, 0.2, 0.25, 0.15, 0.12, 0.18]
 
 # LEAP specifics
 const LEAP_JUMP_DURATION: float = 0.5
@@ -67,12 +69,13 @@ const LEAP_HEIGHT_OFFSET: float = -80.0   # visual only, move Y offset
 # CHARGE specifics
 const CHARGE_SPEED: float = 450.0
 
-# Attack weights per phase — [SLAM, SWEEP, CHARGE, LEAP, COMBO]
+# Attack weights per phase — [SLAM, SWEEP, CHARGE, LEAP, COMBO, THRUST]
 # Zero means unavailable in that phase
+# THRUST 仅在 Phase 2/3 出现, 邀请玩家用見切+登龍
 const PHASE_WEIGHTS: Array[Array] = [
-	[3, 2, 0, 0, 0],   # Phase 1: SLAM + SWEEP only
-	[2, 2, 2, 2, 0],   # Phase 2: + CHARGE + LEAP
-	[1, 1, 2, 2, 3],   # Phase 3: all + COMBO favored
+	[3, 2, 0, 0, 0, 0],   # Phase 1: SLAM + SWEEP only — 学习时机
+	[2, 2, 2, 2, 0, 3],   # Phase 2: + CHARGE + LEAP + THRUST
+	[1, 1, 2, 2, 3, 3],   # Phase 3: all + COMBO favored + THRUST
 ]
 
 # Weight boost for fast attacks after being parried
@@ -98,6 +101,7 @@ var _phase: int = 0   # 0, 1, 2 (maps to Phase 1, 2, 3)
 var _attack_hit_this_swing: bool = false
 var _charge_velocity: Vector2 = Vector2.ZERO
 var _was_parried: bool = false   # set by player via signal, reset after next attack pick
+var _thrust_dir: Vector2 = Vector2.RIGHT  # locked at THRUST telegraph start
 
 # LEAP state
 var _leap_origin: Vector2 = Vector2.ZERO
@@ -333,6 +337,12 @@ func _enter_attack() -> void:
 		AttackType.LEAP:
 			_enter_leap()
 			return   # leap handles its own state
+		AttackType.THRUST:
+			# 锁定方向 = 当前面向玩家
+			if _player_ref:
+				_thrust_dir = (_player_ref.global_position - global_position).normalized()
+			else:
+				_thrust_dir = Vector2.RIGHT
 
 
 func _enter_leap() -> void:
@@ -425,8 +435,27 @@ func _pick_next_attack() -> AttackType:
 func _check_attack_hit() -> void:
 	if _player_ref == null:
 		return
-	var dist := (_player_ref.global_position - global_position).length()
+	var to_player: Vector2 = _player_ref.global_position - global_position
+	var dist: float = to_player.length()
 	var attack_range: float = ATTACK_RANGES[_current_attack]
+
+	# THRUST: 窄线攻击 — 玩家必须在Boss正前方狭窄角度内才命中
+	# 後跳見切是最佳应对 (向后离开线)
+	if _current_attack == AttackType.THRUST:
+		if dist > attack_range:
+			return
+		# 突刺方向 = 起手时锁定的玩家方向
+		var thrust_dir: Vector2 = _thrust_dir
+		var dir_to_player: Vector2 = to_player.normalized()
+		var dot: float = thrust_dir.dot(dir_to_player)
+		# 仅命中正前方 ~30度锥形
+		if dot > 0.86:
+			_attack_hit_this_swing = true
+			var thrust_dmg: int = ATTACK_DAMAGES[_current_attack]
+			_player_ref.take_damage(thrust_dmg, global_position)
+			attack_landed.emit(thrust_dmg, _player_ref.global_position)
+		return
+
 	if dist <= attack_range:
 		_attack_hit_this_swing = true
 		var dmg: int = ATTACK_DAMAGES[_current_attack]

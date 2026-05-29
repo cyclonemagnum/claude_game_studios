@@ -17,7 +17,7 @@ const COMBO_RECOVERY: float = 0.25
 const COMBO_RESET_TIME: float = 0.6
 
 const SPIRIT_PER_HIT: int = 8
-const SPIRIT_DECAY_RATE: float = 5.0
+const SPIRIT_DECAY_RATE: float = 2.5    # 调慢: 5 → 2.5, 鼓励囤气用大招
 const SPIRIT_MAX: int = 100
 
 const SPIRIT_LEVEL_THRESHOLDS: Array[int] = [0, 34, 67]
@@ -42,7 +42,7 @@ const GRAND_IAI_DASH_DURATION: float = 0.25
 const GRAND_IAI_COUNTER_DAMAGE: int = 50
 const GRAND_IAI_COUNTER_DELAY: float = 0.3    # delay before counter slash lands
 const GRAND_IAI_SPIRIT_BONUS: int = 30
-const GRAND_IAI_FAIL_RECOVERY: float = 0.7    # punish for whiffed grand iai
+const GRAND_IAI_FAIL_RECOVERY: float = 0.4    # 调短: 0.7 → 0.4, 让玩家敢按
 const GRAND_IAI_FREEZE_DURATION: float = 0.18
 const GRAND_IAI_SHAKE_INTENSITY: float = 12.0
 const GRAND_IAI_SHAKE_DURATION: float = 0.25
@@ -51,6 +51,30 @@ var grand_iai_window_frames: int = 6           # adjustable at runtime
 # Spirit Release (居合斩) — full gauge finisher
 const RELEASE_DAMAGE: int = 80
 const RELEASE_HITBOX_RADIUS: float = 120.0
+
+# --- 後跳見切 (Back-step Parry) ---
+const BACK_STEP_DURATION: float = 0.28
+const BACK_STEP_SPEED: float = 700.0
+const BACK_STEP_RECOVERY: float = 0.15
+const BACK_STEP_IFRAME_FRAMES: int = 8           # 8 帧見切窗口
+const BACK_STEP_COUNTER_WINDOW: float = 0.55     # 成功后追击窗口
+const BACK_STEP_COUNTER_DASH_DURATION: float = 0.18
+const BACK_STEP_COUNTER_DASH_SPEED: float = 850.0
+const BACK_STEP_COUNTER_DAMAGE: int = 38
+const BACK_STEP_COUNTER_HITBOX_RADIUS: float = 110.0
+const BACK_STEP_SPIRIT_GAIN: int = 20
+
+# --- 登龍 (Helmsplitter — 戳刺→起跳→下劈) ---
+const TORYU_THRUST_DURATION: float = 0.32        # phase 0: 戳刺起手 (易被打断)
+const TORYU_LAUNCH_DURATION: float = 0.18        # phase 1: 起跳 (短暂i-frame)
+const TORYU_DESCENT_DURATION: float = 0.85       # phase 2: 浮空+延迟下劈 (易被打断)
+const TORYU_THRUST_DAMAGE: int = 18
+const TORYU_FINAL_DAMAGE: int = 110              # 命中爆发，比大居合更高
+const TORYU_AOE_RADIUS: float = 140.0
+const TORYU_THRUST_RANGE: float = 90.0
+const TORYU_AIR_HEIGHT: float = 180.0            # 视觉浮空高度
+const TORYU_SPIRIT_COST: int = 30                # 大居合成功后消耗气
+const TORYU_FOLLOWUP_WINDOW: float = 0.6         # 大居合反击命中后窗口
 
 # --- Signals ---
 signal spirit_changed(value: int)
@@ -63,6 +87,18 @@ signal grand_iai_success(frame_hit: int, window: int)
 signal grand_iai_failed()
 signal combo_hit(hit_index: int, damage: int, position: Vector2)
 signal spirit_release_fired(damage: int, position: Vector2)
+
+# 後跳見切
+signal back_step_started()
+signal back_step_absorbed(frame_hit: int, window: int)
+signal back_step_counter_fired(damage: int, position: Vector2)
+
+# 登龍
+signal toryu_window_opened()                    # 大居合成功 → 登龍可触发
+signal toryu_started()
+signal toryu_phase_changed(phase: int)          # 0=戳刺 1=起跳 2=下劈
+signal toryu_landed(damage: int, position: Vector2)
+signal toryu_interrupted()
 
 # --- State ---
 var _spirit: int = 0
@@ -94,6 +130,32 @@ var _counter_pending: bool = false
 var _counter_delay_timer: float = 0.0
 var _counter_origin: Vector2 = Vector2.ZERO
 
+# 後跳見切 state
+var _back_stepping: bool = false
+var _back_step_timer: float = 0.0
+var _back_step_frame_counter: int = 0
+var _back_step_absorbed: bool = false
+var _back_step_recovery: bool = false
+var _back_step_recovery_timer: float = 0.0
+var _back_step_dir: Vector2 = Vector2.ZERO
+
+# 後跳追击 state (前冲斩)
+var _counter_window_timer: float = 0.0
+var _counter_dashing: bool = false
+var _counter_dash_timer: float = 0.0
+var _counter_dash_dir: Vector2 = Vector2.ZERO
+var _counter_dash_hit_done: bool = false
+
+# 登龍 state
+var _toryu_window_timer: float = 0.0          # 大居合成功后给玩家的输入窗口
+var _toryu_active: bool = false
+var _toryu_phase: int = 0
+var _toryu_phase_timer: float = 0.0
+var _toryu_dir: Vector2 = Vector2.RIGHT
+var _toryu_thrust_hit_done: bool = false
+var _toryu_air_offset: float = 0.0            # 视觉Y偏移 (浮空)
+var _toryu_origin: Vector2 = Vector2.ZERO
+
 # References
 var player: CharacterBody2D = null
 var camera: Camera2D = null
@@ -108,6 +170,9 @@ func _physics_process(delta: float) -> void:
 	_update_stance(delta)
 	_update_grand_iai(delta)
 	_update_counter_delay(delta)
+	_update_back_step(delta)
+	_update_counter_dash(delta)
+	_update_toryu(delta)
 
 
 func _update_spirit_decay(delta: float) -> void:
@@ -205,6 +270,10 @@ func can_act() -> bool:
 		and not _grand_iai_in_recovery
 		and not _grand_iai_dashing
 		and not _counter_pending
+		and not _back_stepping
+		and not _back_step_recovery
+		and not _counter_dashing
+		and not _toryu_active
 	)
 
 
@@ -214,6 +283,34 @@ func is_in_stance() -> bool:
 
 func is_grand_iai_dashing() -> bool:
 	return _grand_iai_dashing
+
+
+func is_back_stepping() -> bool:
+	return _back_stepping
+
+
+func is_counter_dashing() -> bool:
+	return _counter_dashing
+
+
+func is_toryu_active() -> bool:
+	return _toryu_active
+
+
+func get_toryu_phase() -> int:
+	return _toryu_phase
+
+
+func get_toryu_air_offset() -> float:
+	return _toryu_air_offset
+
+
+func has_toryu_window() -> bool:
+	return _toryu_window_timer > 0.0
+
+
+func has_counter_window() -> bool:
+	return _counter_window_timer > 0.0
 
 
 func is_busy() -> bool:
@@ -462,6 +559,11 @@ func _execute_grand_iai_counter() -> void:
 		hit_effects.spawn_iai_success(player.global_position)
 
 	_decay_suppress_timer = 1.0
+	# 大居合命中后,开启登龍输入窗口 (条件: 气足够)
+	if _spirit >= TORYU_SPIRIT_COST:
+		_toryu_window_timer = TORYU_FOLLOWUP_WINDOW
+		toryu_window_opened.emit()
+		print("登龍 WINDOW OPENED (%.2fs)" % TORYU_FOLLOWUP_WINDOW)
 	print("大居合 COUNTER: %d base damage" % GRAND_IAI_COUNTER_DAMAGE)
 
 
@@ -525,12 +627,304 @@ func is_iai_active() -> bool:
 
 
 func get_stance_state() -> String:
+	if _toryu_active:
+		match _toryu_phase:
+			0: return "登龍·戳刺"
+			1: return "登龍·起跳"
+			2: return "登龍·浮空"
+		return "登龍"
+	if _counter_dashing:
+		return "前冲斩"
+	if _back_stepping:
+		return "後跳見切"
+	if _back_step_recovery:
+		return "見切后摇"
 	if _grand_iai_dashing:
 		return "大居合"
 	if _counter_pending:
 		return "反击中"
 	if _grand_iai_in_recovery:
 		return "后摇"
+	if _toryu_window_timer > 0.0:
+		return "★登龍窗口★"
+	if _counter_window_timer > 0.0:
+		return "★追击窗口★"
 	if _in_stance:
 		return "居合構え"
 	return "通常"
+
+
+# ============================================================
+# 後跳見切 (Back-step Parry)
+# ============================================================
+
+func press_back_step() -> bool:
+	# Counter dash (前冲斩) input — if window active, J already triggers it via player
+	# 否则启动後跳見切
+	if _counter_window_timer > 0.0:
+		return false   # in counter window — player decides whether to dash
+	if not can_act() and not _in_stance:
+		return false
+	if _in_stance:
+		_exit_stance()
+	return _start_back_step()
+
+
+func _start_back_step() -> bool:
+	if _back_stepping:
+		return false
+	_back_stepping = true
+	_back_step_timer = BACK_STEP_DURATION
+	_back_step_frame_counter = 0
+	_back_step_absorbed = false
+	if player:
+		_back_step_dir = -Vector2.RIGHT.rotated(player.rotation)   # 反向
+	else:
+		_back_step_dir = -Vector2.RIGHT
+	back_step_started.emit()
+	print("後跳見切 START (i-frames: %d)" % BACK_STEP_IFRAME_FRAMES)
+	return true
+
+
+func try_back_step_absorb(_attack_origin: Vector2) -> bool:
+	if not _back_stepping:
+		return false
+	if _back_step_frame_counter > BACK_STEP_IFRAME_FRAMES:
+		return false
+	_back_step_absorbed = true
+	back_step_absorbed.emit(_back_step_frame_counter, BACK_STEP_IFRAME_FRAMES)
+	# Slight hit-freeze for feel
+	if camera:
+		camera.hit_freeze(0.08)
+	print("後跳見切 ABSORBED at frame %d" % _back_step_frame_counter)
+	return true
+
+
+func _update_back_step(delta: float) -> void:
+	if _back_stepping:
+		_back_step_timer -= delta
+		_back_step_frame_counter += 1
+		if player:
+			# Move backward via player.velocity
+			player.velocity = _back_step_dir * BACK_STEP_SPEED
+		if _back_step_timer <= 0.0:
+			_back_stepping = false
+			if player:
+				player.velocity = Vector2.ZERO
+			if _back_step_absorbed:
+				# Open counter dash window
+				_counter_window_timer = BACK_STEP_COUNTER_WINDOW
+				if hit_effects:
+					hit_effects.spawn_iai_success(player.global_position)
+			else:
+				_back_step_recovery = true
+				_back_step_recovery_timer = BACK_STEP_RECOVERY
+
+	if _back_step_recovery:
+		_back_step_recovery_timer -= delta
+		if _back_step_recovery_timer <= 0.0:
+			_back_step_recovery = false
+
+	if _counter_window_timer > 0.0:
+		_counter_window_timer -= delta
+
+
+func press_counter_dash() -> bool:
+	# 在追击窗口内按攻击 → 前冲斩
+	if _counter_window_timer <= 0.0:
+		return false
+	if _counter_dashing:
+		return false
+	_counter_window_timer = 0.0
+	_counter_dashing = true
+	_counter_dash_timer = BACK_STEP_COUNTER_DASH_DURATION
+	_counter_dash_hit_done = false
+	if player:
+		_counter_dash_dir = Vector2.RIGHT.rotated(player.rotation)
+	print("前冲斩 LAUNCHED")
+	return true
+
+
+func _update_counter_dash(delta: float) -> void:
+	if not _counter_dashing:
+		return
+	_counter_dash_timer -= delta
+	if player:
+		player.velocity = _counter_dash_dir * BACK_STEP_COUNTER_DASH_SPEED
+
+	# Continuously check hit
+	if not _counter_dash_hit_done and player:
+		var space := player.get_world_2d().direct_space_state
+		var query := PhysicsShapeQueryParameters2D.new()
+		var shape := CircleShape2D.new()
+		shape.radius = BACK_STEP_COUNTER_HITBOX_RADIUS
+		query.shape = shape
+		query.transform = Transform2D(0.0, player.global_position)
+		query.collision_mask = 4
+		var results := space.intersect_shape(query, 4)
+		for r in results:
+			var body: Node2D = r["collider"] as Node2D
+			if body and body.has_method("take_damage"):
+				var bonus := SPIRIT_DAMAGE_BONUS[_spirit_level]
+				var dmg: int = int(BACK_STEP_COUNTER_DAMAGE * (1.0 + bonus))
+				body.take_damage(dmg, player.global_position)
+				back_step_counter_fired.emit(dmg, body.global_position)
+				if hit_effects:
+					hit_effects.spawn_hit(body.global_position, dmg)
+				if camera:
+					camera.shake(8.0, 0.18)
+					camera.hit_freeze(0.10)
+				_spirit = min(SPIRIT_MAX, _spirit + BACK_STEP_SPIRIT_GAIN)
+				_update_spirit_level()
+				spirit_changed.emit(_spirit)
+				_counter_dash_hit_done = true
+				break
+
+	if _counter_dash_timer <= 0.0:
+		_counter_dashing = false
+		if player:
+			player.velocity = Vector2.ZERO
+		# Brief recovery
+		_in_recovery = true
+		_recovery_timer = 0.18
+
+
+# ============================================================
+# 登龍 (Helmsplitter)
+# 戳刺 → 起跳 → 浮空延迟 → 下劈AOE
+# 在大居合命中后的窗口内可触发，气消耗30
+# 戳刺与浮空阶段可被打断
+# ============================================================
+
+func press_toryu() -> bool:
+	if _toryu_window_timer <= 0.0:
+		return false
+	if _spirit < TORYU_SPIRIT_COST:
+		return false
+	if _toryu_active:
+		return false
+	_toryu_window_timer = 0.0
+	_spirit -= TORYU_SPIRIT_COST
+	spirit_changed.emit(_spirit)
+	_start_toryu()
+	return true
+
+
+func _start_toryu() -> void:
+	_toryu_active = true
+	_toryu_phase = 0
+	_toryu_phase_timer = TORYU_THRUST_DURATION
+	_toryu_thrust_hit_done = false
+	_toryu_air_offset = 0.0
+	if player:
+		_toryu_dir = Vector2.RIGHT.rotated(player.rotation)
+		_toryu_origin = player.global_position
+	toryu_started.emit()
+	toryu_phase_changed.emit(0)
+	print("登龍 STARTED — phase 0 戳刺")
+
+
+func _update_toryu(delta: float) -> void:
+	# Window timer counts down (not consumed yet)
+	if _toryu_window_timer > 0.0:
+		_toryu_window_timer -= delta
+
+	if not _toryu_active:
+		return
+
+	_toryu_phase_timer -= delta
+
+	match _toryu_phase:
+		0:  # 戳刺
+			# Thrust hit check
+			if not _toryu_thrust_hit_done and player:
+				var space := player.get_world_2d().direct_space_state
+				var query := PhysicsShapeQueryParameters2D.new()
+				var shape := CircleShape2D.new()
+				shape.radius = TORYU_THRUST_RANGE
+				query.shape = shape
+				query.transform = Transform2D(0.0, player.global_position + _toryu_dir * 40.0)
+				query.collision_mask = 4
+				var results := space.intersect_shape(query, 4)
+				for r in results:
+					var body: Node2D = r["collider"] as Node2D
+					if body and body.has_method("take_damage"):
+						body.take_damage(TORYU_THRUST_DAMAGE, player.global_position)
+						_toryu_thrust_hit_done = true
+						if hit_effects:
+							hit_effects.spawn_hit(body.global_position, TORYU_THRUST_DAMAGE)
+						break
+			if _toryu_phase_timer <= 0.0:
+				_toryu_phase = 1
+				_toryu_phase_timer = TORYU_LAUNCH_DURATION
+				toryu_phase_changed.emit(1)
+		1:  # 起跳 (短暂i-frame)
+			var t1: float = 1.0 - (_toryu_phase_timer / TORYU_LAUNCH_DURATION)
+			_toryu_air_offset = TORYU_AIR_HEIGHT * t1
+			if _toryu_phase_timer <= 0.0:
+				_toryu_phase = 2
+				_toryu_phase_timer = TORYU_DESCENT_DURATION
+				toryu_phase_changed.emit(2)
+		2:  # 浮空+下劈延迟 (易被打断)
+			# Hold air, then drop
+			var t2: float = _toryu_phase_timer / TORYU_DESCENT_DURATION
+			# Stay high then drop in last 30%
+			if t2 > 0.3:
+				_toryu_air_offset = TORYU_AIR_HEIGHT
+			else:
+				_toryu_air_offset = TORYU_AIR_HEIGHT * (t2 / 0.3)
+			if _toryu_phase_timer <= 0.0:
+				_execute_toryu_landing()
+
+
+func _execute_toryu_landing() -> void:
+	_toryu_air_offset = 0.0
+	if player == null:
+		_toryu_active = false
+		return
+
+	# AOE landing damage
+	var space := player.get_world_2d().direct_space_state
+	var query := PhysicsShapeQueryParameters2D.new()
+	var shape := CircleShape2D.new()
+	shape.radius = TORYU_AOE_RADIUS
+	query.shape = shape
+	query.transform = Transform2D(0.0, player.global_position)
+	query.collision_mask = 4
+	var results := space.intersect_shape(query, 8)
+	for r in results:
+		var body: Node2D = r["collider"] as Node2D
+		if body and body.has_method("take_damage"):
+			var bonus := SPIRIT_DAMAGE_BONUS[_spirit_level]
+			var dmg: int = int(TORYU_FINAL_DAMAGE * (1.0 + bonus))
+			body.take_damage(dmg, player.global_position)
+			toryu_landed.emit(dmg, body.global_position)
+			if hit_effects:
+				hit_effects.spawn_hit(body.global_position, dmg)
+				hit_effects.spawn_iai_success(body.global_position)
+
+	if camera:
+		camera.shake(15.0, 0.35)
+		camera.hit_freeze(0.16)
+
+	_toryu_active = false
+	_in_recovery = true
+	_recovery_timer = 0.5
+	print("登龍 LANDED (%d damage)" % TORYU_FINAL_DAMAGE)
+
+
+# Called by player when taking damage during 登龍 phase 0 or 2
+# Phase 1 (起跳) is i-frame protected
+func try_toryu_interrupt() -> bool:
+	if not _toryu_active:
+		return false
+	if _toryu_phase == 1:
+		return false   # i-frame
+	# Interrupt!
+	_toryu_active = false
+	_toryu_air_offset = 0.0
+	_in_recovery = true
+	_recovery_timer = 0.7   # heavy punish
+	toryu_interrupted.emit()
+	print("登龍 INTERRUPTED at phase %d!" % _toryu_phase)
+	return true

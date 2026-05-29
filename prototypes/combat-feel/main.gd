@@ -75,7 +75,7 @@ func _physics_process(delta: float) -> void:
 	# Update debug label
 	var ls: Node = _player.get_long_sword()
 	var stance_str: String = ls.get_stance_state()
-	var debug := "帧: %d  |  气: %d  |  太刀: %s  |  Boss P%d  |  [ ] 调窗口" % [
+	var debug := "帧: %d  |  气: %d  |  状态: %s  |  Boss P%d  |  U=後跳見切, 大居合命中后L=登龍" % [
 		_frame_count,
 		ls.get_spirit(),
 		stance_str,

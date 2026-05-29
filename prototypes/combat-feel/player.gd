@@ -64,9 +64,22 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_handle_dodge(delta)
 	_handle_movement(delta)
+	_handle_back_step_input()
 	_handle_weapon_input()
 	_handle_facing()
+	_update_toryu_visual()
 	move_and_slide()
+
+
+func _update_toryu_visual() -> void:
+	# 登龍 浮空 — 视觉上把 body 向上偏移
+	if _body_rect == null:
+		return
+	if _long_sword and _long_sword.is_toryu_active():
+		var offset: float = _long_sword.get_toryu_air_offset()
+		_body_rect.position = Vector2(0, -offset)
+	else:
+		_body_rect.position = Vector2.ZERO
 
 
 func _handle_movement(delta: float) -> void:
@@ -77,6 +90,15 @@ func _handle_movement(delta: float) -> void:
 	# Grand iai dash overrides movement (handled by long_sword)
 	if _long_sword.is_grand_iai_dashing():
 		# velocity is set by long_sword._update_grand_iai
+		return
+
+	# 後跳見切 / 前冲斩 — long_sword 直接驱动 player.velocity
+	if _long_sword.is_back_stepping() or _long_sword.is_counter_dashing():
+		return
+
+	# 登龍 — 玩家在原地戳刺/起跳/下劈，不接受移动输入
+	if _long_sword.is_toryu_active():
+		velocity = Vector2.ZERO
 		return
 
 	# Great sword shoulder tackle overrides movement
@@ -94,12 +116,24 @@ func _handle_movement(delta: float) -> void:
 
 
 func _handle_facing() -> void:
-	# Don't change facing during grand iai dash or stance
+	# Don't change facing during grand iai dash, stance, back-step, counter dash, or 登龍
 	if _long_sword.is_grand_iai_dashing():
+		return
+	if _long_sword.is_back_stepping() or _long_sword.is_counter_dashing():
+		return
+	if _long_sword.is_toryu_active():
 		return
 	if velocity.length() > 10.0:
 		_facing = velocity.normalized()
 		rotation = _facing.angle()
+
+
+func _handle_back_step_input() -> void:
+	# 後跳見切 — only for long sword mode
+	if _weapon_mode != 0:
+		return
+	if Input.is_action_just_pressed("back_step"):
+		_long_sword.press_back_step()
 
 
 func _handle_dodge(delta: float) -> void:
@@ -176,6 +210,16 @@ func _handle_great_sword_input() -> void:
 
 
 func _handle_long_sword_input() -> void:
+	# 登龍 input window — 大居合命中后, L 按下触发登龍
+	if _long_sword.has_toryu_window() and Input.is_action_just_pressed("special"):
+		if _long_sword.press_toryu():
+			return
+
+	# 前冲斩 — 後跳見切成功后窗口内按 J 触发
+	if _long_sword.has_counter_window() and Input.is_action_just_pressed("attack"):
+		if _long_sword.press_counter_dash():
+			return
+
 	# In stance: J = mini iai, L = grand iai, K = dodge cancel (handled in _handle_dodge)
 	if _long_sword.is_in_stance():
 		if Input.is_action_just_pressed("attack"):
@@ -200,8 +244,33 @@ func take_damage(amount: int, source_position: Vector2) -> void:
 		if _long_sword.try_grand_iai_absorb(source_position):
 			return   # absorbed, no damage
 
+	# 後跳見切 absorb check — i-frames during back-step
+	if _weapon_mode == 0 and _long_sword.is_back_stepping():
+		if _long_sword.try_back_step_absorb(source_position):
+			return
+
+	# 登龍 phase 1 (起跳) i-frame
+	if _weapon_mode == 0 and _long_sword.is_toryu_active() and _long_sword.get_toryu_phase() == 1:
+		return
+
 	# Dodge i-frames
 	if _dodging:
+		return
+
+	# 登龍 phase 0 / 2 — interrupted = punish
+	if _weapon_mode == 0 and _long_sword.is_toryu_active():
+		if _long_sword.try_toryu_interrupt():
+			# Player still takes the damage of the interrupting attack
+			pass
+
+	# Counter dash 前冲斩 — half damage, no interrupt (super armor light)
+	if _weapon_mode == 0 and _long_sword.is_counter_dashing():
+		var reduced: int = max(1, amount / 2)
+		_hp = max(0, _hp - reduced)
+		health_changed.emit(_hp, MAX_HP)
+		_flash_damage()
+		if _hp <= 0:
+			died.emit()
 		return
 
 	# Great sword shoulder tackle super armor — takes damage but doesn't interrupt
