@@ -45,12 +45,15 @@ var hit_effects: Node2D = null
 # Visual
 var _body_rect: ColorRect = null
 var _flash_tween: Tween = null
+var _body_rect_base_pos: Vector2 = Vector2.ZERO
+var _weapon_visual: Node2D = null   # 武器图形 — 表示攻击范围/方向
 
 
 func _ready() -> void:
 	_body_rect = $BodyRect
 	_great_sword = $GreatSword
 	_long_sword = $LongSword
+	_body_rect_base_pos = _body_rect.position
 
 	_great_sword.player = self
 	_long_sword.player = self
@@ -59,6 +62,83 @@ func _ready() -> void:
 	_long_sword.stance_entered.connect(_on_stance_entered)
 	_long_sword.stance_exited.connect(_on_stance_exited)
 	_update_color()
+	_build_weapon_visual()
+
+
+func _build_weapon_visual() -> void:
+	# 武器图形 = Node2D 含一个长方形 ColorRect, 表示武器
+	# 父节点旋转跟随 player.rotation, 子矩形指向 X+ 方向 (facing)
+	_weapon_visual = Node2D.new()
+	_weapon_visual.z_index = 1
+	add_child(_weapon_visual)
+
+	# Sword blade
+	var blade := ColorRect.new()
+	blade.size = Vector2(70, 5)        # 长 70 = 太刀普攻范围视觉化
+	blade.position = Vector2(8, -2.5)  # 右出剑, 与角色中线齐
+	blade.color = Color(0.85, 0.9, 1.0, 1.0)
+	blade.name = "Blade"
+	_weapon_visual.add_child(blade)
+
+	# Hilt (handle)
+	var hilt := ColorRect.new()
+	hilt.size = Vector2(8, 12)
+	hilt.position = Vector2(0, -6)
+	hilt.color = Color(0.4, 0.25, 0.15, 1.0)
+	hilt.name = "Hilt"
+	_weapon_visual.add_child(hilt)
+
+
+func _update_weapon_visual() -> void:
+	if _weapon_visual == null:
+		return
+	var blade: ColorRect = _weapon_visual.get_node("Blade") as ColorRect
+	if blade == null:
+		return
+
+	# 根据武器/状态切换长度和颜色, 让玩家清楚看到攻击距离
+	var ls: Node = _long_sword
+	var gs: Node = _great_sword
+
+	if _weapon_mode == 0:
+		# 太刀: 普攻范围 70, 居合構え时变蓝, 大居合时变白发光
+		if ls.is_grand_iai_dashing() or ls.is_counter_dashing():
+			blade.size.x = 110.0
+			blade.color = Color(0.6, 0.9, 1.0, 1.0)
+		elif ls.is_back_stepping():
+			blade.size.x = 70.0
+			blade.color = Color(0.5, 0.7, 1.0, 0.9)
+		elif ls.is_in_stance():
+			blade.size.x = 80.0
+			blade.color = Color(0.4, 0.5, 1.0, 1.0)
+		elif ls.is_toryu_active():
+			blade.size.x = 90.0
+			blade.color = Color(1.0, 0.8, 0.3, 1.0)
+		else:
+			blade.size.x = 70.0
+			blade.color = Color(0.85, 0.9, 1.0, 1.0)
+		blade.size.y = 5.0
+	else:
+		# 大剑: 蓄力等级越高图形越大
+		var charge_lv: int = gs.get_charge_level() if gs.has_method("get_charge_level") else 0
+		match charge_lv:
+			3:
+				blade.size = Vector2(120, 14)
+				blade.color = Color(1.0, 1.0, 0.6, 1.0)
+			2:
+				blade.size = Vector2(100, 11)
+				blade.color = Color(1.0, 0.85, 0.3, 1.0)
+			1:
+				blade.size = Vector2(85, 9)
+				blade.color = Color(1.0, 0.7, 0.2, 1.0)
+			_:
+				blade.size = Vector2(85, 9)
+				blade.color = Color(0.9, 0.55, 0.15, 1.0)
+		# 肩撞时变红
+		var tackling: bool = gs.is_shoulder_tackling() if gs.has_method("is_shoulder_tackling") else false
+		if tackling:
+			blade.color = Color(1.0, 0.4, 0.2, 1.0)
+	blade.position.y = -blade.size.y * 0.5
 
 
 func _physics_process(delta: float) -> void:
@@ -68,18 +148,25 @@ func _physics_process(delta: float) -> void:
 	_handle_weapon_input()
 	_handle_facing()
 	_update_toryu_visual()
+	_update_weapon_visual()
 	move_and_slide()
 
 
+var _toryu_was_active: bool = false
+
+
 func _update_toryu_visual() -> void:
-	# 登龍 浮空 — 视觉上把 body 向上偏移
-	if _body_rect == null:
+	# 登龍 浮空 — 仅在状态切换或 phase 内调整 body 偏移
+	if _body_rect == null or _long_sword == null:
 		return
-	if _long_sword and _long_sword.is_toryu_active():
+	var active: bool = _long_sword.is_toryu_active()
+	if active:
 		var offset: float = _long_sword.get_toryu_air_offset()
-		_body_rect.position = Vector2(0, -offset)
-	else:
-		_body_rect.position = Vector2.ZERO
+		_body_rect.position = _body_rect_base_pos + Vector2(0, -offset)
+	elif _toryu_was_active:
+		# 刚刚结束, 恢复一次, 之后不再触碰
+		_body_rect.position = _body_rect_base_pos
+	_toryu_was_active = active
 
 
 func _handle_movement(delta: float) -> void:
@@ -125,7 +212,12 @@ func _handle_facing() -> void:
 		return
 	if velocity.length() > 10.0:
 		_facing = velocity.normalized()
-		rotation = _facing.angle()
+		# Rotation smoothing — 平滑插值, 避免方向切换时画面跳变
+		var target_angle: float = _facing.angle()
+		var current: float = rotation
+		# Shortest-arc lerp
+		var diff: float = wrapf(target_angle - current, -PI, PI)
+		rotation = current + diff * 0.35   # 0.35 = 平滑系数, 越大越快
 
 
 func _handle_back_step_input() -> void:

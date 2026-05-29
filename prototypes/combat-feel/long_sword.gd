@@ -53,10 +53,10 @@ const RELEASE_DAMAGE: int = 80
 const RELEASE_HITBOX_RADIUS: float = 120.0
 
 # --- 後跳見切 (Back-step Parry) ---
-const BACK_STEP_DURATION: float = 0.28
-const BACK_STEP_SPEED: float = 700.0
-const BACK_STEP_RECOVERY: float = 0.15
-const BACK_STEP_IFRAME_FRAMES: int = 8           # 8 帧見切窗口
+const BACK_STEP_DURATION: float = 0.18           # 调短: 0.28 → 0.18
+const BACK_STEP_SPEED: float = 480.0             # 调慢: 700 → 480 (距离 ~86)
+const BACK_STEP_RECOVERY: float = 0.12
+const BACK_STEP_IFRAME_FRAMES: int = 7           # 7 帧見切窗口 (略缩短)
 const BACK_STEP_COUNTER_WINDOW: float = 0.55     # 成功后追击窗口
 const BACK_STEP_COUNTER_DASH_DURATION: float = 0.18
 const BACK_STEP_COUNTER_DASH_SPEED: float = 850.0
