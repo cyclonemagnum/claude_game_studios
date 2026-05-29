@@ -39,6 +39,14 @@ var _phase_flash_rect: ColorRect = null
 
 var _current_parry_frames: int = 6
 
+# HP loss-fill (Hades 风格): 受击后白色血量延迟下降
+var _player_hp_lag: float = 100.0
+var _player_hp_target: float = 100.0
+var _player_hp_lag_bar: ColorRect = null
+var _boss_hp_lag: float = 500.0
+var _boss_hp_target: float = 500.0
+var _boss_hp_lag_bar: ColorRect = null
+
 
 func _ready() -> void:
 	_player_hp_bar = $PlayerHP
@@ -63,6 +71,45 @@ func _ready() -> void:
 	_spirit_container.visible = true
 	_charge_container.visible = false
 
+	# 在 HP 条 后面 加 lag bar
+	_player_hp_lag_bar = ColorRect.new()
+	_player_hp_lag_bar.color = Color(1.0, 1.0, 1.0, 0.85)
+	_player_hp_lag_bar.size = _player_hp_bar.size
+	_player_hp_lag_bar.position = _player_hp_bar.position
+	_player_hp_lag_bar.z_index = -1
+	_player_hp_bar.get_parent().add_child(_player_hp_lag_bar)
+	_player_hp_bar.get_parent().move_child(_player_hp_lag_bar, _player_hp_bar.get_index())
+
+	_boss_hp_lag_bar = ColorRect.new()
+	_boss_hp_lag_bar.color = Color(1.0, 1.0, 1.0, 0.85)
+	_boss_hp_lag_bar.size = _boss_hp_bar.size
+	_boss_hp_lag_bar.position = _boss_hp_bar.position
+	_boss_hp_lag_bar.z_index = -1
+	_boss_hp_bar.get_parent().add_child(_boss_hp_lag_bar)
+	_boss_hp_bar.get_parent().move_child(_boss_hp_lag_bar, _boss_hp_bar.get_index())
+
+
+func _process(delta: float) -> void:
+	# Lag bars chase target HP slowly
+	const LAG_SPEED: float = 80.0   # HP 单位 / 秒 (玩家 100, 大约 1.25s 走完一条)
+	const BOSS_LAG_SPEED: float = 250.0
+	if _player_hp_lag > _player_hp_target:
+		_player_hp_lag = max(_player_hp_target, _player_hp_lag - LAG_SPEED * delta)
+	else:
+		_player_hp_lag = _player_hp_target
+	if _boss_hp_lag > _boss_hp_target:
+		_boss_hp_lag = max(_boss_hp_target, _boss_hp_lag - BOSS_LAG_SPEED * delta)
+	else:
+		_boss_hp_lag = _boss_hp_target
+
+	if _player_hp_lag_bar and _player_hp_bar:
+		var ratio_p: float = _player_hp_lag / max(1.0, _player_hp_bar.max_value)
+		_player_hp_lag_bar.size.x = _player_hp_bar.size.x * ratio_p
+
+	if _boss_hp_lag_bar and _boss_hp_bar:
+		var ratio_b: float = _boss_hp_lag / max(1.0, _boss_hp_bar.max_value)
+		_boss_hp_lag_bar.size.x = _boss_hp_bar.size.x * ratio_b
+
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("parry_window_increase"):
@@ -79,12 +126,19 @@ func set_player_hp(current: int, maximum: int) -> void:
 	if _player_hp_bar:
 		_player_hp_bar.max_value = maximum
 		_player_hp_bar.value = current
+	# Lag bar logic: 当前 HP 立即跳到 current, lag bar 慢慢跟上
+	_player_hp_target = float(current)
+	if _player_hp_lag < _player_hp_target:
+		_player_hp_lag = _player_hp_target   # 受治疗时立即同步
 
 
 func set_boss_hp(current: int, maximum: int) -> void:
 	if _boss_hp_bar:
 		_boss_hp_bar.max_value = maximum
 		_boss_hp_bar.value = current
+	_boss_hp_target = float(current)
+	if _boss_hp_lag < _boss_hp_target:
+		_boss_hp_lag = _boss_hp_target
 
 
 func set_weapon(name_str: String, mode: int) -> void:

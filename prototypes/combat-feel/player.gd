@@ -157,14 +157,17 @@ var _toryu_was_active: bool = false
 
 func _update_toryu_visual() -> void:
 	# 登龍 浮空 — 仅在状态切换或 phase 内调整 body 偏移
+	# 注意: player 有 rotation, body_rect 是子节点会跟着转,
+	# 所以需要把"屏幕向上" 反旋转到本地空间
 	if _body_rect == null or _long_sword == null:
 		return
 	var active: bool = _long_sword.is_toryu_active()
 	if active:
 		var offset: float = _long_sword.get_toryu_air_offset()
-		_body_rect.position = _body_rect_base_pos + Vector2(0, -offset)
+		# screen-up = Vector2(0, -1) in global, rotate inverse to local
+		var local_up: Vector2 = Vector2(0, -1).rotated(-rotation)
+		_body_rect.position = _body_rect_base_pos + local_up * offset
 	elif _toryu_was_active:
-		# 刚刚结束, 恢复一次, 之后不再触碰
 		_body_rect.position = _body_rect_base_pos
 	_toryu_was_active = active
 

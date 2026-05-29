@@ -128,6 +128,60 @@ func _ready() -> void:
 	_state_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
 
 
+# 自定义绘制 — 在 telegraph/attacking 阶段画警示弧线
+func _process(_delta: float) -> void:
+	queue_redraw()
+
+
+func _draw() -> void:
+	# 仅 telegraph 和 attacking 阶段显示攻击范围
+	if _state != BossState.TELEGRAPH and _state != BossState.ATTACKING:
+		return
+
+	var attack_range: float = ATTACK_RANGES[_current_attack]
+	var alpha: float = 0.45
+	var fill_color: Color = Color(1.0, 0.3, 0.0, alpha)
+	if _state == BossState.ATTACKING:
+		fill_color = Color(1.0, 0.0, 0.0, 0.55)
+
+	# 不同攻击形状不同
+	match _current_attack:
+		AttackType.SLAM:
+			# 圆形冲击
+			draw_circle(Vector2.ZERO, attack_range, fill_color)
+		AttackType.SWEEP:
+			# 360度横扫
+			draw_circle(Vector2.ZERO, attack_range, Color(fill_color.r, fill_color.g, fill_color.b, fill_color.a * 0.8))
+		AttackType.CHARGE:
+			# 朝玩家方向的长矩形
+			if _player_ref:
+				var dir: Vector2 = (_player_ref.global_position - global_position).normalized()
+				var length: float = attack_range
+				var width: float = 100.0
+				_draw_rotated_rect(dir, length, width, fill_color)
+		AttackType.LEAP:
+			# 玩家位置 + AOE
+			if _player_ref:
+				var to_player: Vector2 = _player_ref.global_position - global_position
+				draw_circle(to_player, attack_range, fill_color)
+		AttackType.COMBO:
+			draw_circle(Vector2.ZERO, attack_range, fill_color)
+		AttackType.THRUST:
+			# 锁定方向窄锥
+			_draw_rotated_rect(_thrust_dir, attack_range, 80.0, fill_color)
+
+
+func _draw_rotated_rect(direction: Vector2, length: float, width: float, color: Color) -> void:
+	# 以 (0,0) 为起点, 朝 direction 方向画一个长矩形
+	var half_width: float = width * 0.5
+	var perp: Vector2 = Vector2(-direction.y, direction.x) * half_width
+	var p0: Vector2 = -perp
+	var p1: Vector2 = perp
+	var p2: Vector2 = direction * length + perp
+	var p3: Vector2 = direction * length - perp
+	draw_colored_polygon(PackedVector2Array([p0, p1, p2, p3]), color)
+
+
 func set_player(p: CharacterBody2D) -> void:
 	_player_ref = p
 
