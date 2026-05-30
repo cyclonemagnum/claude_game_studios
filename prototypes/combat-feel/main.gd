@@ -3,14 +3,23 @@ extends Node2D
 
 ## Main scene — combat arena. Spawns player and boss, wires everything together.
 
+const Cards = preload("res://cards.gd")
+const RewardScreenScript = preload("res://reward_screen.gd")
+const RunStateScript = preload("res://run_state.gd")
+
 var _player: CharacterBody2D = null
 var _boss: CharacterBody2D = null
 var _camera: Camera2D = null
 var _hud: CanvasLayer = null
 var _hit_effects: Node2D = null
 var _sword_trail: Line2D = null
+var _reward_screen: CanvasLayer = null
+var _run_state: Node = null
 
 var _frame_count: int = 0
+var _wave_index: int = 0           # 0/1/2 — 共 3 波 Boss
+const TOTAL_WAVES: int = 3
+const WAVE_HP_SCALE: Array[float] = [1.0, 1.4, 1.8]
 
 
 func _ready() -> void:
@@ -29,6 +38,19 @@ func _ready() -> void:
 	add_child(_sword_trail)
 	_sword_trail.set_player(_player)
 
+	# Build run state
+	_run_state = Node.new()
+	_run_state.set_script(RunStateScript)
+	_run_state.name = "RunState"
+	add_child(_run_state)
+
+	# Build reward screen
+	_reward_screen = CanvasLayer.new()
+	_reward_screen.set_script(RewardScreenScript)
+	_reward_screen.name = "RewardScreen"
+	add_child(_reward_screen)
+	_reward_screen.card_selected.connect(_on_card_selected)
+
 	# Wire player refs
 	_player.camera = _camera
 	_player.hit_effects = _hit_effects
@@ -36,6 +58,7 @@ func _ready() -> void:
 	_player.get_great_sword().hit_effects = _hit_effects
 	_player.get_long_sword().camera = _camera
 	_player.get_long_sword().hit_effects = _hit_effects
+	_player.get_long_sword().run_state_ref = _run_state
 
 	# Wire boss
 	_boss.set_player(_player)
@@ -82,11 +105,20 @@ func _physics_process(delta: float) -> void:
 	# Update debug label
 	var ls: Node = _player.get_long_sword()
 	var stance_str: String = ls.get_stance_state()
-	var debug := "帧: %d  |  气: %d  |  状态: %s  |  Boss P%d  |  U=後跳見切, 大居合命中后L=登龍" % [
-		_frame_count,
+	var cards_str: String = ""
+	if _run_state.collected_card_ids.size() > 0:
+		var names: Array[String] = []
+		for cid in _run_state.collected_card_ids:
+			var c: Dictionary = Cards.get_card_by_id(cid)
+			names.append(c["name"])
+		cards_str = "  |  卷轴: " + ", ".join(names)
+	var debug := "波次 %d/%d  |  气: %d  |  状态: %s  |  Boss P%d%s" % [
+		_wave_index + 1,
+		TOTAL_WAVES,
 		ls.get_spirit(),
 		stance_str,
 		_boss.get_phase() + 1,
+		cards_str,
 	]
 	_hud.update_debug(debug)
 
@@ -169,7 +201,39 @@ func _on_boss_health_changed(current: int, maximum: int) -> void:
 
 
 func _on_boss_defeated() -> void:
-	print("--- FIGHT OVER: Boss defeated! Press R to restart. ---")
+	print("--- WAVE %d CLEARED ---" % (_wave_index + 1))
+	if _wave_index >= TOTAL_WAVES - 1:
+		print("--- RUN COMPLETE! Press R to restart. ---")
+		return
+	# 弹出奖励界面
+	var existing_ids: Array[String] = []
+	for cid in _run_state.collected_card_ids:
+		existing_ids.append(cid)
+	var choices: Array[Dictionary] = Cards.get_random_choices(3, existing_ids)
+	if choices.size() == 0:
+		_advance_wave()
+		return
+	# 延迟一下让Boss死亡动画播放
+	await get_tree().create_timer(0.8).timeout
+	_reward_screen.open(choices)
+
+
+func _on_card_selected(card_id: String) -> void:
+	var card: Dictionary = Cards.get_card_by_id(card_id)
+	print("CARD PICKED: [%s] %s" % [Cards.get_type_name(card["type"]), card["name"]])
+	_run_state.add_card(card_id, _player, _player.get_long_sword(), _player.get_great_sword())
+	_advance_wave()
+
+
+func _advance_wave() -> void:
+	_wave_index += 1
+	# 重置玩家
+	_player.reset_for_next_wave()
+	# 重置 Boss + 缩放 HP
+	var hp_scale: float = WAVE_HP_SCALE[clampi(_wave_index, 0, WAVE_HP_SCALE.size() - 1)]
+	_boss.respawn_for_wave(hp_scale)
+	_hud.set_boss_hp(_boss.get_max_hp_scaled(), _boss.get_max_hp_scaled())
+	print("--- WAVE %d START (HP scale %.1fx) ---" % [_wave_index + 1, hp_scale])
 
 
 func _on_grand_iai_success(frame_hit: int, window: int) -> void:

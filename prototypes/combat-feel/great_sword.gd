@@ -64,6 +64,15 @@ var hit_effects: Node2D = null
 
 
 func _physics_process(delta: float) -> void:
+	# 玩家死亡 → 中断所有技能 (修复死后大剑/肩撞仍生效的 bug)
+	if player and player.has_method("get_hp") and player.get_hp() <= 0:
+		_charging = false
+		_swing_active = false
+		_tackling = false
+		_tackle_recovery = false
+		_in_recovery = false
+		return
+
 	# Tackle
 	if _tackling:
 		_tackle_timer -= delta

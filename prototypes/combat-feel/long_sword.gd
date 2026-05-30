@@ -103,6 +103,10 @@ signal toryu_interrupted()
 # --- State ---
 var _spirit: int = 0
 var _spirit_level: int = 0
+
+# === Roguelite buff hooks ===
+var combo_damage_mult: float = 1.0
+var run_state_ref: Node = null   # main 注入
 var _combo_index: int = 0
 var _combo_timer: float = 0.0
 var _hit_active: bool = false
@@ -163,6 +167,18 @@ var hit_effects: Node2D = null
 
 
 func _physics_process(delta: float) -> void:
+	# 玩家死亡 → 停止所有技能更新 (修复死后技能仍造成伤害的 bug)
+	if player and player.has_method("get_hp") and player.get_hp() <= 0:
+		_in_stance = false
+		_grand_iai_dashing = false
+		_counter_pending = false
+		_back_stepping = false
+		_counter_dashing = false
+		_toryu_active = false
+		_toryu_window_timer = 0.0
+		_counter_window_timer = 0.0
+		return
+
 	_update_spirit_decay(delta)
 	_update_combo_timer(delta)
 	_update_hit_window(delta)
@@ -181,6 +197,9 @@ func _update_spirit_decay(delta: float) -> void:
 		return
 	if _in_stance:
 		return   # no decay during stance
+	# 鬼神化: 完全停止气衰减
+	if run_state_ref and run_state_ref.has_demonform:
+		return
 	if _spirit > 0:
 		_spirit = max(0, _spirit - int(SPIRIT_DECAY_RATE * delta + 0.5))
 		_update_spirit_level()
@@ -361,7 +380,11 @@ func _check_combo_hits() -> void:
 				var idx: int = clampi(_combo_index - 1, 0, 2)
 				var bonus := SPIRIT_DAMAGE_BONUS[_spirit_level]
 				var base_dmg: int = COMBO_DAMAGE[idx]
-				var dmg: int = int(base_dmg * (1.0 + bonus))
+				var dmg: int = int(base_dmg * (1.0 + bonus) * combo_damage_mult)
+				# 残气加成: 闪避后 0.4s 内普攻 +50%
+				if player and player.has_method("is_post_dodge_window") and player.is_post_dodge_window():
+					if run_state_ref and run_state_ref.has_afterbreath:
+						dmg = int(dmg * 1.5)
 				body.take_damage(dmg, origin)
 				combo_hit.emit(idx, dmg, body.global_position)
 
@@ -525,11 +548,16 @@ func _execute_grand_iai_counter() -> void:
 	if player == null:
 		return
 
+	# 共鸣卡: AOE 半径 ×2.2
+	var radius_mult: float = 1.0
+	if run_state_ref and run_state_ref.has_resonance:
+		radius_mult = 2.2
+
 	# Big counter slash
 	var space := player.get_world_2d().direct_space_state
 	var query := PhysicsShapeQueryParameters2D.new()
 	var shape := CircleShape2D.new()
-	shape.radius = HITBOX_RADIUS * 1.5
+	shape.radius = HITBOX_RADIUS * 1.5 * radius_mult
 	query.shape = shape
 	query.transform = Transform2D(0.0, player.global_position)
 	query.collision_mask = 4
@@ -539,7 +567,12 @@ func _execute_grand_iai_counter() -> void:
 		var body: Node2D = r["collider"] as Node2D
 		if body and body.has_method("take_damage"):
 			var bonus := SPIRIT_DAMAGE_BONUS[_spirit_level]
-			var dmg: int = int(GRAND_IAI_COUNTER_DAMAGE * (1.0 + bonus))
+			var base_dmg: int = GRAND_IAI_COUNTER_DAMAGE
+			var dist: float = (body.global_position - player.global_position).length()
+			# 共鸣的远端目标只受 60% 伤害
+			if run_state_ref and run_state_ref.has_resonance and dist > HITBOX_RADIUS * 1.5:
+				base_dmg = int(base_dmg * 0.6)
+			var dmg: int = int(base_dmg * (1.0 + bonus))
 			body.take_damage(dmg, player.global_position)
 			combo_hit.emit(-2, dmg, body.global_position)
 

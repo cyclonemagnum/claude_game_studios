@@ -142,6 +142,12 @@ func _update_weapon_visual() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# 死后停止接受输入和技能 — 修复死后还能放技能造成伤害的 bug
+	if _hp <= 0:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
 	_handle_dodge(delta)
 	_handle_movement(delta)
 	_handle_back_step_input()
@@ -235,6 +241,10 @@ func _handle_dodge(delta: float) -> void:
 	if _dodge_cooldown_timer > 0.0:
 		_dodge_cooldown_timer -= delta
 
+	# 残气窗口倒计时
+	if _post_dodge_window > 0.0:
+		_post_dodge_window -= delta
+
 	if _dodging:
 		_dodge_timer -= delta
 		if _dodge_timer <= 0.0:
@@ -242,6 +252,8 @@ func _handle_dodge(delta: float) -> void:
 			_invincible = false
 			_update_color()
 			_dodge_cooldown_timer = DODGE_COOLDOWN
+			# 闪避结束后开 0.4s 残气窗口 (供"残气"卡查询)
+			_post_dodge_window = 0.4
 		return
 
 	if Input.is_action_just_pressed("dodge") and _dodge_cooldown_timer <= 0.0:
@@ -362,7 +374,7 @@ func take_damage(amount: int, source_position: Vector2) -> void:
 	if _weapon_mode == 0 and _long_sword.is_counter_dashing():
 		var reduced: int = max(1, amount / 2)
 		_hp = max(0, _hp - reduced)
-		health_changed.emit(_hp, MAX_HP)
+		health_changed.emit(_hp, get_effective_max_hp())
 		_flash_damage()
 		if _hp <= 0:
 			died.emit()
@@ -375,14 +387,14 @@ func take_damage(amount: int, source_position: Vector2) -> void:
 			# Take reduced damage but don't interrupt
 			var reduced: int = max(1, amount / 2)
 			_hp = max(0, _hp - reduced)
-			health_changed.emit(_hp, MAX_HP)
+			health_changed.emit(_hp, get_effective_max_hp())
 			_flash_damage()
 			if _hp <= 0:
 				died.emit()
 			return
 
 	_hp = max(0, _hp - amount)
-	health_changed.emit(_hp, MAX_HP)
+	health_changed.emit(_hp, get_effective_max_hp())
 
 	if camera:
 		camera.shake(5.0, 0.15)
@@ -464,5 +476,39 @@ func reset() -> void:
 	_invincible = false
 	_dodge_timer = 0.0
 	_dodge_cooldown_timer = 0.0
-	health_changed.emit(_hp, MAX_HP)
+	health_changed.emit(_hp, get_effective_max_hp())
+	_update_color()
+
+
+# === Roguelite buff hooks ===
+# 卷轴卡通过修改这些字段达成属性增益
+var MAX_HP_BONUS: int = 0
+var MAX_HP_MULT: float = 1.0
+
+
+func get_effective_max_hp() -> int:
+	return int((MAX_HP + MAX_HP_BONUS) * MAX_HP_MULT)
+
+
+func heal_full() -> void:
+	_hp = get_effective_max_hp()
+	health_changed.emit(_hp, get_effective_max_hp())
+
+
+# 闪避后短暂窗口供"残气"卡查询
+var _post_dodge_window: float = 0.0
+
+
+func is_post_dodge_window() -> bool:
+	return _post_dodge_window > 0.0
+
+
+func reset_for_next_wave() -> void:
+	_hp = get_effective_max_hp()
+	_dodging = false
+	_invincible = false
+	_dodge_timer = 0.0
+	_dodge_cooldown_timer = 0.0
+	_post_dodge_window = 0.0
+	health_changed.emit(_hp, get_effective_max_hp())
 	_update_color()

@@ -526,7 +526,7 @@ func take_damage(amount: int, source_position: Vector2) -> void:
 	if _state == BossState.DEAD:
 		return
 	_hp = max(0, _hp - amount)
-	health_changed.emit(_hp, MAX_HP)
+	health_changed.emit(_hp, get_max_hp_scaled())
 
 	# Flash white on hit
 	if _body_rect:
@@ -542,7 +542,7 @@ func take_damage(amount: int, source_position: Vector2) -> void:
 
 
 func _check_phase_transition() -> void:
-	var hp_ratio: float = float(_hp) / float(MAX_HP)
+	var hp_ratio: float = float(_hp) / float(get_max_hp_scaled())
 	var target_phase: int = 0
 	if hp_ratio <= PHASE3_THRESHOLD:
 		target_phase = 2
@@ -598,3 +598,36 @@ func reset() -> void:
 	if _label:
 		_label.text = ""
 	health_changed.emit(_hp, MAX_HP)
+
+
+# === Roguelite multi-wave hooks ===
+var _wave_hp_scale: float = 1.0
+
+
+func get_max_hp_scaled() -> int:
+	return int(MAX_HP * _wave_hp_scale)
+
+
+func respawn_for_wave(hp_scale: float) -> void:
+	_wave_hp_scale = hp_scale
+	_hp = get_max_hp_scaled()
+	_phase = 0
+	_state = BossState.IDLE
+	_state_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
+	_was_parried = false
+	_last_attack = AttackType.SLAM
+	velocity = Vector2.ZERO
+	_charge_velocity = Vector2.ZERO
+	# Reposition to opposite side from player
+	if _player_ref:
+		var dir: Vector2 = (global_position - _player_ref.global_position).normalized()
+		if dir.length() < 0.1:
+			dir = Vector2.RIGHT
+		global_position = _player_ref.global_position + dir * 400.0
+	visible = true
+	if _body_rect:
+		_body_rect.color = PHASE_COLORS[0]
+		_body_rect.position.y = 0.0
+	if _label:
+		_label.text = ""
+	health_changed.emit(_hp, get_max_hp_scaled())
