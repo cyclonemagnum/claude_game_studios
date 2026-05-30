@@ -47,6 +47,7 @@ var _body_rect: ColorRect = null
 var _flash_tween: Tween = null
 var _body_rect_base_pos: Vector2 = Vector2.ZERO
 var _weapon_visual: Node2D = null   # 武器图形 — 表示攻击范围/方向
+var _sprite: Sprite2D = null        # Tiny Swords Warrior sprite
 
 
 func _ready() -> void:
@@ -63,6 +64,24 @@ func _ready() -> void:
 	_long_sword.stance_exited.connect(_on_stance_exited)
 	_update_color()
 	_build_weapon_visual()
+	_build_sprite()
+
+
+func _build_sprite() -> void:
+	# 用 Tiny Swords Warrior 第一帧作为静态形象 (192x192 frame)
+	var tex: Texture2D = load("res://player_warrior.png") as Texture2D
+	if tex == null:
+		print("WARN: player_warrior.png not loaded — keeping ColorRect")
+		return
+	_sprite = Sprite2D.new()
+	_sprite.texture = tex
+	_sprite.region_enabled = true
+	_sprite.region_rect = Rect2(0, 0, 192, 192)
+	_sprite.scale = Vector2(0.45, 0.45)
+	_sprite.z_index = 1
+	add_child(_sprite)
+	# 隐藏色块身体
+	_body_rect.visible = false
 
 
 func _build_weapon_visual() -> void:
@@ -146,6 +165,7 @@ func _physics_process(delta: float) -> void:
 	if _hp <= 0:
 		velocity = Vector2.ZERO
 		move_and_slide()
+		_update_sprite_orientation()
 		return
 
 	_handle_dodge(delta)
@@ -155,7 +175,20 @@ func _physics_process(delta: float) -> void:
 	_handle_facing()
 	_update_toryu_visual()
 	_update_weapon_visual()
+	_update_sprite_orientation()
 	move_and_slide()
+
+
+func _update_sprite_orientation() -> void:
+	# Tiny Swords sprite 是侧视角, 需要保持竖直 + 仅左右翻转
+	# 玩家本体 rotation 用于命中检测; sprite 反向旋转保持竖直
+	if _sprite == null:
+		return
+	_sprite.rotation = -rotation
+	# 朝向: 玩家 facing 在屏幕左边时 → flip
+	var screen_facing_left: bool = _facing.x < 0.0
+	var s: float = abs(_sprite.scale.x)
+	_sprite.scale.x = -s if screen_facing_left else s
 
 
 var _toryu_was_active: bool = false
@@ -412,6 +445,11 @@ func _flash_damage() -> void:
 	_flash_tween = create_tween()
 	_flash_tween.tween_property(_body_rect, "color", Color.RED, 0.05)
 	_flash_tween.tween_property(_body_rect, "color", _get_base_color(), 0.15)
+	# Sprite damage flash (modulate to red and back)
+	if _sprite:
+		var t2 := create_tween()
+		t2.tween_property(_sprite, "modulate", Color(1.5, 0.4, 0.4), 0.05)
+		t2.tween_property(_sprite, "modulate", Color.WHITE, 0.18)
 
 
 func _on_charge_level_changed(level: int) -> void:

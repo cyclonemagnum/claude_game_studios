@@ -119,6 +119,7 @@ var _transition_flash_timer: float = 0.0
 var _player_ref: CharacterBody2D = null
 var _body_rect: ColorRect = null
 var _label: Label = null
+var _sprite: Sprite2D = null
 
 
 func _ready() -> void:
@@ -126,6 +127,33 @@ func _ready() -> void:
 	_label = $AttackLabel
 	_state = BossState.IDLE
 	_state_timer = randf_range(IDLE_TIME_MIN, IDLE_TIME_MAX)
+	_build_sprite()
+
+
+func _build_sprite() -> void:
+	# Tiny Swords Goblin Torch 第一帧
+	var tex: Texture2D = load("res://boss_goblin.png") as Texture2D
+	if tex == null:
+		print("WARN: boss_goblin.png not loaded")
+		return
+	_sprite = Sprite2D.new()
+	_sprite.texture = tex
+	_sprite.region_enabled = true
+	_sprite.region_rect = Rect2(0, 0, 192, 192)
+	_sprite.scale = Vector2(0.7, 0.7)   # Boss 略大
+	_sprite.z_index = 1
+	add_child(_sprite)
+	_body_rect.visible = false
+
+
+func _update_sprite_orientation() -> void:
+	if _sprite == null or _player_ref == null:
+		return
+	# Boss 不旋转 (sprite 永远竖直). 朝向取决于 Boss 在玩家的左/右
+	var dx: float = _player_ref.global_position.x - global_position.x
+	var s: float = abs(_sprite.scale.x)
+	# 默认 sprite 朝右; dx > 0 表示玩家在右侧 → 不翻转
+	_sprite.scale.x = s if dx >= 0.0 else -s
 
 
 # 自定义绘制 — 在 telegraph/attacking 阶段画警示弧线
@@ -218,6 +246,8 @@ func _physics_process(delta: float) -> void:
 	# Only apply physics movement for non-leap states
 	if _state != BossState.LEAP_AIRBORNE:
 		move_and_slide()
+
+	_update_sprite_orientation()
 
 
 # --- State ticks ---
@@ -533,6 +563,10 @@ func take_damage(amount: int, source_position: Vector2) -> void:
 		var tween := create_tween()
 		tween.tween_property(_body_rect, "color", Color.WHITE, 0.04)
 		tween.tween_property(_body_rect, "color", _get_state_color(), 0.1)
+	if _sprite:
+		var t2 := create_tween()
+		t2.tween_property(_sprite, "modulate", Color(1.8, 1.8, 1.8), 0.04)
+		t2.tween_property(_sprite, "modulate", Color.WHITE, 0.12)
 
 	# Check phase transitions
 	_check_phase_transition()
