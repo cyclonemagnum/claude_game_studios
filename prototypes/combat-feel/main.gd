@@ -15,6 +15,7 @@ var _hit_effects: Node2D = null
 var _sword_trail: Line2D = null
 var _reward_screen: CanvasLayer = null
 var _run_state: Node = null
+var _sfx: Node = null
 
 var _frame_count: int = 0
 var _wave_index: int = 0           # 0/1/2 — 共 3 波 Boss
@@ -43,6 +44,12 @@ func _ready() -> void:
 	_run_state.set_script(RunStateScript)
 	_run_state.name = "RunState"
 	add_child(_run_state)
+
+	# Build SFX manager
+	_sfx = Node.new()
+	_sfx.set_script(preload("res://sfx_manager.gd"))
+	_sfx.name = "Sfx"
+	add_child(_sfx)
 
 	# Build reward screen
 	_reward_screen = CanvasLayer.new()
@@ -75,21 +82,37 @@ func _ready() -> void:
 	_player.health_changed.connect(_on_player_health_changed)
 	_player.weapon_switched.connect(_on_weapon_switched)
 	_player.died.connect(_on_player_died)
+	if _player.has_signal("dodge_started"):
+		_player.dodge_started.connect(func(): _sfx.play_random_pitch("dodge"))
 
 	# Connect signals — boss
 	_boss.health_changed.connect(_on_boss_health_changed)
 	_boss.defeated.connect(_on_boss_defeated)
 	_boss.phase_changed.connect(_on_boss_phase_changed)
+	_boss.attack_telegraphed.connect(_on_boss_telegraph)
 
 	# Connect signals — long sword
 	var ls: Node = _player.get_long_sword()
 	ls.spirit_changed.connect(_hud.set_spirit)
 	ls.spirit_level_changed.connect(_hud.set_spirit_level)
 	ls.grand_iai_success.connect(_on_grand_iai_success)
+	ls.combo_hit.connect(_on_combo_hit)
+	ls.stance_entered.connect(func(): _sfx.play("stance"))
+	if ls.has_signal("toryu_started"):
+		ls.toryu_started.connect(func(): _sfx.play("toryu_launch"))
+	if ls.has_signal("toryu_landed"):
+		ls.toryu_landed.connect(func(_d, _p): _sfx.play("toryu_impact"))
+	if ls.has_signal("back_step_started"):
+		ls.back_step_started.connect(func(): _sfx.play("dodge", 1.15))
+	if ls.has_signal("back_step_absorbed"):
+		ls.back_step_absorbed.connect(func(_f, _w): _sfx.play("iai_success", 1.15))
 
 	# Connect signals — great sword
 	var gs: Node = _player.get_great_sword()
 	gs.charge_level_changed.connect(_hud.set_charge_level)
+	gs.charge_level_changed.connect(_on_charge_level_for_sfx)
+	if gs.has_signal("attacked"):
+		gs.attacked.connect(_on_gs_swing)
 
 	# HUD parry window changes → long sword grand iai window
 	_hud.parry_window_changed.connect(_on_parry_window_changed)
@@ -185,6 +208,13 @@ func _update_sword_trail() -> void:
 
 func _on_player_health_changed(current: int, maximum: int) -> void:
 	_hud.set_player_hp(current, maximum)
+	# 受击音效 (HP减少时)
+	if _last_player_hp > current and _sfx:
+		_sfx.play_random_pitch("player_hurt")
+	_last_player_hp = current
+
+
+var _last_player_hp: int = 100
 
 
 func _on_weapon_switched(weapon_name: String) -> void:
@@ -202,6 +232,8 @@ func _on_boss_health_changed(current: int, maximum: int) -> void:
 
 func _on_boss_defeated() -> void:
 	print("--- WAVE %d CLEARED ---" % (_wave_index + 1))
+	if _sfx:
+		_sfx.play("boss_defeated")
 	if _wave_index >= TOTAL_WAVES - 1:
 		print("--- RUN COMPLETE! Press R to restart. ---")
 		return
@@ -222,6 +254,8 @@ func _on_card_selected(card_id: String) -> void:
 	var card: Dictionary = Cards.get_card_by_id(card_id)
 	print("CARD PICKED: [%s] %s" % [Cards.get_type_name(card["type"]), card["name"]])
 	_run_state.add_card(card_id, _player, _player.get_long_sword(), _player.get_great_sword())
+	if _sfx:
+		_sfx.play("card_pick")
 	_advance_wave()
 
 
@@ -239,10 +273,52 @@ func _advance_wave() -> void:
 func _on_grand_iai_success(frame_hit: int, window: int) -> void:
 	_hud.flash_iai_success()
 	_boss.notify_parried()
+	if _sfx:
+		_sfx.play("iai_success")
+
+
+func _on_combo_hit(hit_index: int, damage: int, _pos: Vector2) -> void:
+	if _sfx == null:
+		return
+	# 大居合反击 / 终结技 → 重击音效
+	if hit_index == -2:    # grand iai counter
+		_sfx.play("hit_heavy")
+	elif hit_index == -1:  # mini iai
+		_sfx.play_random_pitch("hit_light", 0.85, 0.95)
+	elif damage >= 60:
+		_sfx.play("hit_heavy")
+	else:
+		_sfx.play_random_pitch("hit_light")
+	# 武器挥动声 — 在普攻时播放
+	if hit_index >= 0:
+		_sfx.play_random_pitch("whoosh", 0.95, 1.1)
+
+
+func _on_charge_level_for_sfx(level: int) -> void:
+	if _sfx == null or level <= 0:
+		return
+	_sfx.play("charge_up", 1.0 + (level - 1) * 0.15, -8.0)
+
+
+func _on_gs_swing(damage: int, _pos: Vector2, charge_level: int) -> void:
+	if _sfx == null:
+		return
+	if charge_level >= 3:
+		_sfx.play("hit_heavy", 1.05)
+	elif charge_level == 2:
+		_sfx.play("hit_heavy", 0.85, -3.0)
+	else:
+		_sfx.play_random_pitch("hit_light")
+	_sfx.play("whoosh", 0.7 + charge_level * 0.1, -2.0)
 
 
 func _on_boss_phase_changed(new_phase: int) -> void:
 	_hud.set_boss_phase(new_phase)
+
+
+func _on_boss_telegraph(_attack_name: String) -> void:
+	if _sfx:
+		_sfx.play_random_pitch("telegraph", 0.95, 1.05)
 
 
 func _on_parry_window_changed(new_frames: int) -> void:

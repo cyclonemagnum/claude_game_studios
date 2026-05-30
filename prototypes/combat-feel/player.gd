@@ -23,6 +23,7 @@ const COLOR_SHOULDER: Color = Color(1.0, 0.7, 0.2)
 signal health_changed(current: int, maximum: int)
 signal weapon_switched(weapon_name: String)
 signal died()
+signal dodge_started()
 
 # State
 var _hp: int = MAX_HP
@@ -48,6 +49,7 @@ var _flash_tween: Tween = null
 var _body_rect_base_pos: Vector2 = Vector2.ZERO
 var _weapon_visual: Node2D = null   # 武器图形 — 表示攻击范围/方向
 var _sprite: Sprite2D = null        # Tiny Swords Warrior sprite
+var _shadow: Node2D = null          # 登龙阴影 — top-level 在地面绘制
 
 
 func _ready() -> void:
@@ -82,6 +84,13 @@ func _build_sprite() -> void:
 	add_child(_sprite)
 	# 隐藏色块身体
 	_body_rect.visible = false
+
+	# 阴影 (top_level → 不跟随玩家旋转, 直接画在地面)
+	_shadow = Node2D.new()
+	_shadow.set_script(preload("res://shadow.gd"))
+	_shadow.top_level = true
+	_shadow.z_index = -1
+	add_child(_shadow)
 
 
 func _build_weapon_visual() -> void:
@@ -184,6 +193,10 @@ func _update_sprite_orientation() -> void:
 	# 玩家本体 rotation 用于命中检测; sprite 反向旋转保持竖直
 	if _sprite == null:
 		return
+	# 登龙期间不要覆盖 sprite scale (toryu 自己控制拉伸)
+	if _long_sword and _long_sword.is_toryu_active():
+		_sprite.rotation = -rotation
+		return
 	_sprite.rotation = -rotation
 	# 朝向: 玩家 facing 在屏幕左边时 → flip
 	var screen_facing_left: bool = _facing.x < 0.0
@@ -203,17 +216,58 @@ func _update_toryu_visual() -> void:
 	var active: bool = _long_sword.is_toryu_active()
 	if active:
 		var offset: float = _long_sword.get_toryu_air_offset()
+		var phase: int = _long_sword.get_toryu_phase()
 		# screen-up = Vector2(0, -1) in global, rotate inverse to local
 		var local_up: Vector2 = Vector2(0, -1).rotated(-rotation)
+
+		# 阶段 0/2 微抖 (戳刺起手 + 浮空蓄力, 表示"易被打断/紧张感")
+		var jitter: Vector2 = Vector2.ZERO
+		if phase == 0 or phase == 2:
+			jitter = Vector2(
+				randf_range(-2.0, 2.0),
+				randf_range(-2.0, 2.0)
+			).rotated(-rotation)
+
+		var visual_offset: Vector2 = local_up * offset + jitter
 		if _body_rect:
-			_body_rect.position = _body_rect_base_pos + local_up * offset
+			_body_rect.position = _body_rect_base_pos + visual_offset
 		if _sprite:
-			_sprite.position = local_up * offset
+			_sprite.position = visual_offset
+			# 拉伸效果 — 起跳时变高变窄, 砸地瞬间变扁
+			var base_scale: float = 0.45
+			match phase:
+				0:  # 戳刺 — 微微变低 (蓄力姿态)
+					_sprite.scale.y = base_scale * 0.95
+					var sx: float = base_scale * 1.05
+					_sprite.scale.x = -sx if _sprite.scale.x < 0 else sx
+				1:  # 起跳 — 拉长拉细
+					_sprite.scale.y = base_scale * 1.25
+					var sx2: float = base_scale * 0.85
+					_sprite.scale.x = -sx2 if _sprite.scale.x < 0 else sx2
+				2:  # 浮空 — 略压缩 (准备砸下)
+					_sprite.scale.y = base_scale * 1.1
+					var sx3: float = base_scale * 0.95
+					_sprite.scale.x = -sx3 if _sprite.scale.x < 0 else sx3
+
+		# 阴影 — 跟在地面上, 高度越大阴影越小越淡
+		if _shadow:
+			_shadow.global_position = global_position
+			var h_ratio: float = clampf(offset / 180.0, 0.0, 1.0)
+			_shadow.set_radius(24.0 * (1.0 - h_ratio * 0.6))
+			_shadow.set_alpha(1.0 - h_ratio * 0.4)
 	elif _toryu_was_active:
 		if _body_rect:
 			_body_rect.position = _body_rect_base_pos
 		if _sprite:
 			_sprite.position = Vector2.ZERO
+			# 砸地后短暂 squash (压扁) 再回弹
+			var base_scale: float = 0.45
+			var t := create_tween()
+			var current_x_sign: float = 1.0 if _sprite.scale.x >= 0 else -1.0
+			_sprite.scale = Vector2(base_scale * 1.25 * current_x_sign, base_scale * 0.7)
+			t.tween_property(_sprite, "scale", Vector2(base_scale * current_x_sign, base_scale), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		if _shadow:
+			_shadow.set_alpha(0.0)
 	_toryu_was_active = active
 
 
@@ -323,6 +377,7 @@ func _start_dodge() -> void:
 	_invincible = true
 	if _body_rect:
 		_body_rect.color = COLOR_DODGE
+	dodge_started.emit()
 
 
 func _handle_weapon_input() -> void:
